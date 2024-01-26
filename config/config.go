@@ -16,7 +16,6 @@ import (
 	"github.com/0xPolygonHermez/zkevm-aggregator/metrics"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state/runtime/executor"
-	"github.com/0xPolygonHermez/zkevm-aggregator/synchronizer"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 	"github.com/urfave/cli/v2"
@@ -86,9 +85,6 @@ type Config struct {
 	EthTxManager ethtxmanager.Config
 	// Configuration for RPC service. THis one offers a extended Ethereum JSON-RPC API interface to interact with the node
 	RPC jsonrpc.Config
-	// Configuration of service `Syncrhonizer`. For this service is also really important the value of `IsTrustedSequencer`
-	// because depending of this values is going to ask to a trusted node for trusted transactions or not
-	Synchronizer synchronizer.Config
 	// Configuration of the aggregator service
 	Aggregator aggregator.Config
 	// Configuration of the genesis of the network. This is used to known the initial state of the network
