@@ -17,7 +17,6 @@ import (
 	"github.com/0xPolygonHermez/zkevm-aggregator/config"
 	"github.com/0xPolygonHermez/zkevm-aggregator/db"
 	"github.com/0xPolygonHermez/zkevm-aggregator/etherman"
-	"github.com/0xPolygonHermez/zkevm-aggregator/ethtxmanager"
 	"github.com/0xPolygonHermez/zkevm-aggregator/event"
 	"github.com/0xPolygonHermez/zkevm-aggregator/event/nileventstorage"
 	"github.com/0xPolygonHermez/zkevm-aggregator/event/pgeventstorage"
@@ -28,6 +27,7 @@ import (
 	"github.com/0xPolygonHermez/zkevm-aggregator/state"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state/pgstatestorage"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state/runtime/executor"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
@@ -114,12 +114,10 @@ func start(cliCtx *cli.Context) error {
 	// If the aggregator is restarted before the end of the sync process, this currentForkID could be wrong
 	c.Aggregator.ForkId = currentForkID
 
-	ethTxManagerStorage, err := ethtxmanager.NewPostgresStorage(c.State.DB)
+	etm, err := ethtxmanager.New(c.EthTxManager)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	etm := ethtxmanager.New(c.EthTxManager, etherman, ethTxManagerStorage, st)
 
 	ev := &event.Event{
 		ReceivedAt: time.Now(),

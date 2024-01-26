@@ -6,8 +6,8 @@ import (
 
 	"github.com/0xPolygonHermez/zkevm-aggregator/aggregator/prover"
 	ethmanTypes "github.com/0xPolygonHermez/zkevm-aggregator/etherman/types"
-	"github.com/0xPolygonHermez/zkevm-aggregator/ethtxmanager"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/jackc/pgx/v4"
 )
@@ -29,10 +29,10 @@ type proverInterface interface {
 // ethTxManager contains the methods required to send txs to
 // ethereum.
 type ethTxManager interface {
-	Add(ctx context.Context, owner, id string, from common.Address, to *common.Address, value *big.Int, data []byte, gasOffset uint64, dbTx pgx.Tx) error
-	Result(ctx context.Context, owner, id string, dbTx pgx.Tx) (ethtxmanager.MonitoredTxResult, error)
-	ResultsByStatus(ctx context.Context, owner string, statuses []ethtxmanager.MonitoredTxStatus, dbTx pgx.Tx) ([]ethtxmanager.MonitoredTxResult, error)
-	ProcessPendingMonitoredTxs(ctx context.Context, owner string, failedResultHandler ethtxmanager.ResultHandler, dbTx pgx.Tx)
+	Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte) (common.Hash, error)
+	Result(ctx context.Context, id common.Hash) (ethtxmanager.MonitoredTxResult, error)
+	ResultsByStatus(ctx context.Context, statuses []ethtxmanager.MonitoredTxStatus) ([]ethtxmanager.MonitoredTxResult, error)
+	ProcessPendingMonitoredTxs(ctx context.Context, resultHandler ethtxmanager.ResultHandler)
 }
 
 // etherman contains the methods required to interact with ethereum
