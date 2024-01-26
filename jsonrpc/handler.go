@@ -168,18 +168,6 @@ func (h *Handler) RemoveFilterByWsConn(wsConn *concurrentWsConn) {
 	if ethEndpointsInterface == nil {
 		log.Errorf("failed to get ETH endpoint interface")
 	}
-
-	ethEndpoints := ethEndpointsInterface.(*EthEndpoints)
-	if ethEndpoints == nil {
-		log.Errorf("failed to get ETH endpoint instance")
-		return
-	}
-
-	err := ethEndpoints.uninstallFilterByWSConn(wsConn)
-	if err != nil {
-		log.Errorf("failed to uninstall filter by web socket connection:, %v", err)
-		return
-	}
 }
 
 func (h *Handler) registerService(service Service) {

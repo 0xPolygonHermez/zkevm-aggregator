@@ -5,28 +5,12 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/0xPolygonHermez/zkevm-aggregator/pool"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state/runtime"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/jackc/pgx/v4"
 )
-
-// PoolInterface contains the methods required to interact with the tx pool.
-type PoolInterface interface {
-	AddTx(ctx context.Context, tx types.Transaction, ip string) error
-	GetGasPrices(ctx context.Context) (pool.GasPrices, error)
-	GetNonce(ctx context.Context, address common.Address) (uint64, error)
-	GetPendingTxHashesSince(ctx context.Context, since time.Time) ([]common.Hash, error)
-	GetPendingTxs(ctx context.Context, limit uint64) ([]pool.Transaction, error)
-	CountPendingTransactions(ctx context.Context) (uint64, error)
-	GetTransactionByHash(ctx context.Context, hash common.Hash) (*pool.Transaction, error)
-	GetTransactionByL2Hash(ctx context.Context, hash common.Hash) (*pool.Transaction, error)
-	CalculateEffectiveGasPrice(rawTx []byte, txGasPrice *big.Int, txGasUsed uint64, l1GasPrice uint64, l2GasPrice uint64) (*big.Int, error)
-	CalculateEffectiveGasPricePercentage(gasPrice *big.Int, effectiveGasPrice *big.Int) (uint8, error)
-	EffectiveGasPriceEnabled() bool
-}
 
 // StateInterface gathers the methods required to interact with the state.
 type StateInterface interface {

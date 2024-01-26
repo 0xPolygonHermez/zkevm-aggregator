@@ -69,7 +69,6 @@ type Service struct {
 func NewServer(
 	cfg Config,
 	chainID uint64,
-	p types.PoolInterface,
 	s types.StateInterface,
 	storage storageInterface,
 	services []Service,

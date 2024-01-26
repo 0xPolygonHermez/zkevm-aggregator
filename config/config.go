@@ -10,14 +10,10 @@ import (
 	"github.com/0xPolygonHermez/zkevm-aggregator/etherman"
 	"github.com/0xPolygonHermez/zkevm-aggregator/ethtxmanager"
 	"github.com/0xPolygonHermez/zkevm-aggregator/event"
-	"github.com/0xPolygonHermez/zkevm-aggregator/gasprice"
 	"github.com/0xPolygonHermez/zkevm-aggregator/jsonrpc"
 	"github.com/0xPolygonHermez/zkevm-aggregator/log"
 	"github.com/0xPolygonHermez/zkevm-aggregator/merkletree"
 	"github.com/0xPolygonHermez/zkevm-aggregator/metrics"
-	"github.com/0xPolygonHermez/zkevm-aggregator/pool"
-	"github.com/0xPolygonHermez/zkevm-aggregator/sequencer"
-	"github.com/0xPolygonHermez/zkevm-aggregator/sequencesender"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state/runtime/executor"
 	"github.com/0xPolygonHermez/zkevm-aggregator/synchronizer"
@@ -88,23 +84,15 @@ type Config struct {
 	Etherman etherman.Config
 	// Configuration for ethereum transaction manager
 	EthTxManager ethtxmanager.Config
-	// Pool service configuration
-	Pool pool.Config
 	// Configuration for RPC service. THis one offers a extended Ethereum JSON-RPC API interface to interact with the node
 	RPC jsonrpc.Config
 	// Configuration of service `Syncrhonizer`. For this service is also really important the value of `IsTrustedSequencer`
 	// because depending of this values is going to ask to a trusted node for trusted transactions or not
 	Synchronizer synchronizer.Config
-	// Configuration of the sequencer service
-	Sequencer sequencer.Config
-	// Configuration of the sequence sender service
-	SequenceSender sequencesender.Config
 	// Configuration of the aggregator service
 	Aggregator aggregator.Config
 	// Configuration of the genesis of the network. This is used to known the initial state of the network
 	NetworkConfig NetworkConfig
-	// Configuration of the gas price suggester service
-	L2GasPriceSuggester gasprice.Config
 	// Configuration of the executor service
 	Executor executor.Config
 	// Configuration of the merkle tree client service. Not use in the node, only for testing
