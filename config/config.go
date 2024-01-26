@@ -10,7 +10,6 @@ import (
 	"github.com/0xPolygonHermez/zkevm-aggregator/etherman"
 	"github.com/0xPolygonHermez/zkevm-aggregator/ethtxmanager"
 	"github.com/0xPolygonHermez/zkevm-aggregator/event"
-	"github.com/0xPolygonHermez/zkevm-aggregator/jsonrpc"
 	"github.com/0xPolygonHermez/zkevm-aggregator/log"
 	"github.com/0xPolygonHermez/zkevm-aggregator/merkletree"
 	"github.com/0xPolygonHermez/zkevm-aggregator/metrics"
@@ -83,8 +82,6 @@ type Config struct {
 	Etherman etherman.Config
 	// Configuration for ethereum transaction manager
 	EthTxManager ethtxmanager.Config
-	// Configuration for RPC service. THis one offers a extended Ethereum JSON-RPC API interface to interact with the node
-	RPC jsonrpc.Config
 	// Configuration of the aggregator service
 	Aggregator aggregator.Config
 	// Configuration of the genesis of the network. This is used to known the initial state of the network

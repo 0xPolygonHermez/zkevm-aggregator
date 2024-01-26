@@ -233,9 +233,6 @@ func newState(ctx context.Context, c *config.Config, l2ChainID uint64, forkIDInt
 		WaitOnResourceExhaustion:     c.Executor.WaitOnResourceExhaustion,
 		ForkUpgradeBatchNumber:       c.ForkUpgradeBatchNumber,
 		ForkUpgradeNewForkId:         c.ForkUpgradeNewForkId,
-		MaxLogsCount:                 c.RPC.MaxLogsCount,
-		MaxLogsBlockRange:            c.RPC.MaxLogsBlockRange,
-		MaxNativeBlockHashBlockRange: c.RPC.MaxNativeBlockHashBlockRange,
 	}
 	allLeaves, err := stateDb.GetAllL1InfoRootEntries(ctx, nil)
 	if err != nil {
