@@ -28,9 +28,7 @@ import (
 const (
 	mockedStateRoot     = "0x090bcaf734c4f06c93954a827b45a6e8c67b8e0fd1e0a35a1c5982d6961828f9"
 	mockedLocalExitRoot = "0x17c04c3760510b48c6012742c540a81aba4bca2f78b9d14bfd2f123e2e53ea3e"
-
-	ethTxManagerOwner = "aggregator"
-	monitoredIDFormat = "proof-from-%v-to-%v"
+	// monitoredIDFormat   = "proof-from-%v-to-%v"
 )
 
 type finalProofMsg struct {
@@ -1175,9 +1173,11 @@ func (a *Aggregator) handleMonitoredTxResult(result ethtxmanager.MonitoredTxResu
 	*/
 }
 
+/*
 func buildMonitoredTxID(batchNumber, batchNumberFinal uint64) string {
 	return fmt.Sprintf(monitoredIDFormat, batchNumber, batchNumberFinal)
 }
+*/
 
 func (a *Aggregator) cleanupLockedProofs() {
 	for {
