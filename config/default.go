@@ -13,10 +13,10 @@ Outputs = ["stderr"]
 
 [State]
 	[State.DB]
-	User = "state_user"
-	Password = "state_password"
-	Name = "state_db"
-	Host = "zkevm-state-db"
+	User = "aggregator_user"
+	Password = "aggregator_password"
+	Name = "aggregator_db"
+	Host = "zkevm-aggregator-db"
 	Port = "5432"
 	EnableLog = false	
 	MaxConns = 200
@@ -192,7 +192,7 @@ Enabled = false
 User = "prover_user"
 Password = "prover_pass"
 Name = "prover_db"
-Host = "zkevm-state-db"
+Host = "zkevm-aggregator-db"
 Port = "5432"
 EnableLog = false
 MaxConns = 200

@@ -214,19 +214,19 @@ func Test_Defaults(t *testing.T) {
 		},
 		{
 			path:          "State.DB.User",
-			expectedValue: "state_user",
+			expectedValue: "aggregator_user",
 		},
 		{
 			path:          "State.DB.Password",
-			expectedValue: "state_password",
+			expectedValue: "aggregator_password",
 		},
 		{
 			path:          "State.DB.Name",
-			expectedValue: "state_db",
+			expectedValue: "aggregator_db",
 		},
 		{
 			path:          "State.DB.Host",
-			expectedValue: "zkevm-state-db",
+			expectedValue: "zkevm-aggregator-db",
 		},
 		{
 			path:          "State.DB.Port",

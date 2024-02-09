@@ -54,14 +54,11 @@ func start(cliCtx *cli.Context) error {
 
 	// Migrations
 	if !cliCtx.Bool(config.FlagMigrations) {
-		for _, comp := range components {
-			if comp == AGGREGATOR {
-				log.Infof("Running DB migrations host: %s:%s db:%s user:%s", c.State.DB.Host, c.State.DB.Port, c.State.DB.Name, c.State.DB.User)
-				runStateMigrations(c.State.DB)
-			}
-		}
+		log.Infof("Running DB migrations host: %s:%s db:%s user:%s", c.State.DB.Host, c.State.DB.Port, c.State.DB.Name, c.State.DB.User)
+		runAggregatorMigrations(c.State.DB)
 	}
-	checkStateMigrations(c.State.DB)
+
+	checkAggregatorMigrations(c.State.DB)
 
 	var (
 		eventLog                      *event.EventLog
@@ -155,12 +152,12 @@ func setupLog(c log.Config) {
 	log.Init(c)
 }
 
-func runStateMigrations(c db.Config) {
-	runMigrations(c, db.StateMigrationName)
+func runAggregatorMigrations(c db.Config) {
+	runMigrations(c, db.AggregatorMigrationName)
 }
 
-func checkStateMigrations(c db.Config) {
-	err := db.CheckMigrations(c, db.StateMigrationName)
+func checkAggregatorMigrations(c db.Config) {
+	err := db.CheckMigrations(c, db.AggregatorMigrationName)
 	if err != nil {
 		log.Fatal(err)
 	}

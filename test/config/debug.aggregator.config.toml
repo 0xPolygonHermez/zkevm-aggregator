@@ -7,13 +7,13 @@ Outputs = ["stderr"]
 
 [State]
 	[State.DB]
-	User = "state_user"
-	Password = "state_password"
-	Name = "state_db"
-	Host = "zkevm-state-db"
+	User = "aggregator_user"
+	Password = "aggregator_password"
+	Name = "aggregator_db"
+	Host = "localhost"
 	Port = "5432"
-	EnableLog = false	
-	MaxConns = 200
+	EnableLog = true
+	MaxConns = 10
 	[State.Batch]
 		[State.Batch.Constraints]
 		MaxTxsPerBatch = 300
@@ -32,8 +32,8 @@ Outputs = ["stderr"]
 FreeClaimGasLimit = 1500000
 IntervalToRefreshBlockedAddresses = "5m"
 IntervalToRefreshGasPrices = "5s"
-MaxTxBytesSize=100132
-MaxTxDataBytesSize=100000
+MaxTxBytesSize=30132
+MaxTxDataBytesSize=30000
 DefaultMinGasPriceAllowed = 1000000000
 MinAllowedGasPriceInterval = "5m"
 PollMinAllowedGasPriceInterval = "15s"
@@ -54,16 +54,16 @@ GlobalQueue = 1024
 	User = "pool_user"
 	Password = "pool_password"
 	Name = "pool_db"
-	Host = "zkevm-pool-db"
-	Port = "5432"
+	Host = "localhost"
+	Port = "5433"
 	EnableLog = false
-	MaxConns = 200
+	MaxConns = 10
 
 [Etherman]
-URL = "http://zkevm-mock-l1-network:8545"
+URL = "http://localhost:8545"
 ForkIDChunkSize = 20000
 MultiGasProvider = false
-	[Etherscan]
+	[Etherman.Etherscan]
 		ApiKey = ""
 
 [RPC]
@@ -71,7 +71,7 @@ Host = "0.0.0.0"
 Port = 8123
 ReadTimeout = "60s"
 WriteTimeout = "60s"
-MaxRequestsPerIPAndSecond = 5000
+MaxRequestsPerIPAndSecond = 10000
 SequencerNodeURI = ""
 EnableL2SuggestedGasPricePolling = true
 	[RPC.WebSockets]
@@ -79,23 +79,9 @@ EnableL2SuggestedGasPricePolling = true
 		Port = 8133
 
 [Synchronizer]
-SyncInterval = "1s"
+SyncInterval = "5s"
 SyncChunkSize = 100
-TrustedSequencerURL = "" # If it is empty or not specified, then the value is read from the smc.
-L1SynchronizationMode = "parallel"
-	[Synchronizer.L1ParallelSynchronization]
-		MaxClients = 10
-		MaxPendingNoProcessedBlocks = 25
-		RequestLastBlockPeriod = "5s"
-		RequestLastBlockTimeout = "5s"
-		RequestLastBlockMaxRetries = 3
-		StatisticsPeriod = "5m"
-		TimeoutMainLoop = "5m"
-		RollupInfoRetriesSpacing= "5s"
-		FallbackToSequentialModeOnSynchronized = false
-		[Synchronizer.L1ParallelSynchronization.PerformanceWarning]
-			AceptableInacctivityTime = "5s"
-			ApplyAfterNumRollupReceived = 10
+TrustedSequencerURL = ""
 
 [Sequencer]
 DeletePoolTxsL1BlockConfirmations = 100
@@ -111,8 +97,8 @@ StateConsistencyCheckInterval = "5s"
 		ForcedBatchesCheckInterval = "10s"
 		L1InfoTreeL1BlockConfirmations = 0
 		L1InfoTreeCheckInterval = "10s"
-		BatchMaxDeltaTimestamp = "10s"
-		L2BlockMaxDeltaTimestamp = "2s"
+		BatchMaxDeltaTimestamp = "60s"
+		L2BlockMaxDeltaTimestamp = "3s"		
 		ResourceExhaustedMarginPct = 10
 		HaltOnBatchNumber = 0
 		SequentialBatchSanityCheck = false
@@ -129,15 +115,13 @@ LastBatchVirtualizationTimeMaxWaitPeriod = "10s"
 L1BlockTimestampMargin = "5s"
 MaxTxSizeForL1 = 131072
 L2Coinbase = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
-PrivateKey = {Path = "/pk/sequencer.keystore", Password = "testonly"}
-	[SequenceSender.StreamClient]
-		Server = "zkevm-sequencer:6900"
+PrivateKey = {Path = "./test/sequencer.keystore", Password = "testonly"}
 
 [Aggregator]
 Host = "0.0.0.0"
 Port = 50081
 RetryTime = "5s"
-VerifyProofInterval = "10s"
+VerifyProofInterval = "30s"
 TxProfitabilityCheckerType = "acceptall"
 TxProfitabilityMinReward = "1.1"
 ProofStatePollingInterval = "5s"
@@ -149,47 +133,36 @@ UpgradeEtrogBatchNumber = 0
 [EthTxManager]
 ForcedGas = 0
 PrivateKeys = [
-	{Path = "/pk/sequencer.keystore", Password = "testonly"},
-	{Path = "/pk/aggregator.keystore", Password = "testonly"}
+	{Path = "../test/sequencer.keystore", Password = "testonly"},
+	{Path = "../test/aggregator.keystore", Password = "testonly"}
 ]
 
 [L2GasPriceSuggester]
 Type = "default"
-UpdatePeriod = "10s"
-Factor = 0.5
 DefaultGasPriceWei = 1000000000
 MaxGasPriceWei = 0
 
 [MTClient]
-URI  = "zkevm-prover:50061"
+URI = "127.0.0.1:50061"
 
 [Executor]
-URI = "zkevm-prover:50071"
+URI = "127.0.0.1:50071"
 MaxGRPCMessageSize = 100000000
 
 [Metrics]
 Host = "0.0.0.0"
 Port = 9091
-Enabled = true
+Enabled = false
 ProfilingHost = "0.0.0.0"
 ProfilingPort = 6060
-ProfilingEnabled = true
+ProfilingEnabled = false
 
 [EventLog]
 	[EventLog.DB]
 	User = "event_user"
 	Password = "event_password"
 	Name = "event_db"
-	Host = "zkevm-event-db"
-	Port = "5432"
+	Host = "localhost"
+	Port = "5435"
 	EnableLog = false
 	MaxConns = 200
-
-[HashDB]
-User = "prover_user"
-Password = "prover_pass"
-Name = "prover_db"
-Host = "zkevm-state-db"
-Port = "5432"
-EnableLog = false
-MaxConns = 200
