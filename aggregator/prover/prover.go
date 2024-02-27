@@ -102,12 +102,12 @@ func (p *Prover) SupportsForkID(forkID uint64) bool {
 
 // BatchProof instructs the prover to generate a batch proof for the provided
 // input. It returns the ID of the proof being computed.
-func (p *Prover) BatchProof(input *InputProver) (*string, error) {
+func (p *Prover) BatchProof(input *StatelessInputProver) (*string, error) {
 	metrics.WorkingProver()
 
 	req := &AggregatorMessage{
-		Request: &AggregatorMessage_GenBatchProofRequest{
-			GenBatchProofRequest: &GenBatchProofRequest{Input: input},
+		Request: &AggregatorMessage_GenStatelessBatchProofRequest{
+			GenStatelessBatchProofRequest: &GenStatelessBatchProofRequest{Input: input},
 		},
 	}
 	res, err := p.call(req)

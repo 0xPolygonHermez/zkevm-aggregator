@@ -19,7 +19,7 @@ type proverInterface interface {
 	ID() string
 	Addr() string
 	IsIdle() (bool, error)
-	BatchProof(input *prover.InputProver) (*string, error)
+	BatchProof(input *prover.StatelessInputProver) (*string, error)
 	AggregatedProof(inputProof1, inputProof2 string) (*string, error)
 	FinalProof(inputProof string, aggregatorAddr string) (*string, error)
 	WaitRecursiveProof(ctx context.Context, proofID string) (string, error)

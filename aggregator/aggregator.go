@@ -845,8 +845,9 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 
 	proof.InputProver = string(b)
 
-	log.Infof("Sending a batch to the prover. OldStateRoot [%#x], OldBatchNum [%d]",
-		inputProver.PublicInputs.OldStateRoot, inputProver.PublicInputs.OldBatchNum)
+	// TODO: Find a better log message
+	log.Infof("Sending a batch to the prover. OldAccInputHash [%#x], L1InfoRoot [%#x]",
+		inputProver.PublicInputs.OldAccInputHash, inputProver.PublicInputs.L1InfoRoot)
 
 	genProofID, err = prover.BatchProof(inputProver)
 	if err != nil {
@@ -965,7 +966,7 @@ func (a *Aggregator) isSynced(ctx context.Context, batchNum *uint64) bool {
 	return true
 }
 
-func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.Batch) (*prover.InputProver, error) {
+func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.Batch) (*prover.StatelessInputProver, error) {
 	previousBatch, err := a.State.GetBatchByNumber(ctx, batchToVerify.BatchNumber-1, nil)
 	if err != nil && err != state.ErrNotFound {
 		return nil, fmt.Errorf("failed to get previous batch, err: %v", err)
@@ -1059,8 +1060,8 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 		}
 	}
 
-	inputProver := &prover.InputProver{
-		PublicInputs: &prover.PublicInputs{
+	inputProver := &prover.StatelessInputProver{
+		PublicInputs: &prover.StatelessPublicInputs{
 			OldStateRoot:      previousBatch.StateRoot.Bytes(),
 			OldAccInputHash:   previousBatch.AccInputHash.Bytes(),
 			OldBatchNum:       previousBatch.BatchNumber,
@@ -1083,7 +1084,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 	return inputProver, nil
 }
 
-func printInputProver(inputProver *prover.InputProver) {
+func printInputProver(inputProver *prover.StatelessInputProver) {
 	log.Debugf("OldStateRoot: %v", common.BytesToHash(inputProver.PublicInputs.OldStateRoot))
 	log.Debugf("OldAccInputHash: %v", common.BytesToHash(inputProver.PublicInputs.OldAccInputHash))
 	log.Debugf("OldBatchNum: %v", inputProver.PublicInputs.OldBatchNum)
