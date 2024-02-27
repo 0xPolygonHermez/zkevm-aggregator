@@ -33,6 +33,7 @@ type ProcessingContextV2 struct {
 	ForcedBlockHashL1    *common.Hash
 	SkipVerifyL1InfoRoot uint32
 	GlobalExitRoot       common.Hash // GlobalExitRoot is not use for execute but use to OpenBatch (data on  DB)
+	ClosingReason        ClosingReason
 }
 
 // ProcessBatchV2 processes a batch for forkID >= ETROG
@@ -250,7 +251,11 @@ func (s *State) processBatchV2(ctx context.Context, processingCtx *ProcessingCon
 	if processingCtx.L1InfoRoot != (common.Hash{}) {
 		processBatchRequest.L1InfoRoot = processingCtx.L1InfoRoot.Bytes()
 	} else {
-		currentl1InfoRoot := s.GetCurrentL1InfoRoot()
+		currentl1InfoRoot, err := s.GetCurrentL1InfoRoot(ctx, dbTx)
+		if err != nil {
+			log.Errorf("error getting current L1InfoRoot: %v", err)
+			return nil, err
+		}
 		processBatchRequest.L1InfoRoot = currentl1InfoRoot.Bytes()
 	}
 
@@ -378,7 +383,7 @@ func (s *State) ProcessAndStoreClosedBatchV2(ctx context.Context, processingCtx 
 		return common.Hash{}, noFlushID, noProverID, err
 	}
 	processed, err := s.processBatchV2(ctx, &processingCtx, caller, dbTx)
-	if err != nil {
+	if err != nil && processed.ErrorRom == executor.RomError_ROM_ERROR_NO_ERROR {
 		log.Errorf("%s error processBatchV2: %v", debugPrefix, err)
 		return common.Hash{}, noFlushID, noProverID, err
 	}
@@ -392,7 +397,7 @@ func (s *State) ProcessAndStoreClosedBatchV2(ctx context.Context, processingCtx 
 		log.Errorf("%s error isRomOOCError: %v", debugPrefix, err)
 	}
 
-	if len(processedBatch.BlockResponses) > 0 && !processedBatch.IsRomOOCError {
+	if len(processedBatch.BlockResponses) > 0 && !processedBatch.IsRomOOCError && processedBatch.RomError_V2 == nil {
 		for _, blockResponse := range processedBatch.BlockResponses {
 			err = s.StoreL2Block(ctx, processingCtx.BatchNumber, blockResponse, nil, dbTx)
 			if err != nil {
@@ -407,5 +412,17 @@ func (s *State) ProcessAndStoreClosedBatchV2(ctx context.Context, processingCtx 
 		LocalExitRoot: processedBatch.NewLocalExitRoot,
 		AccInputHash:  processedBatch.NewAccInputHash,
 		BatchL2Data:   *BatchL2Data,
+		ClosingReason: processingCtx.ClosingReason,
 	}, dbTx)
+}
+
+// BuildChangeL2Block returns a changeL2Block tx to use in the BatchL2Data
+func (p *State) BuildChangeL2Block(deltaTimestamp uint32, l1InfoTreeIndex uint32) []byte {
+	l2block := ChangeL2BlockHeader{
+		DeltaTimestamp:  deltaTimestamp,
+		IndexL1InfoTree: l1InfoTreeIndex,
+	}
+	var data []byte
+	data = l2block.Encode(data)
+	return data
 }

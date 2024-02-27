@@ -749,8 +749,23 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 		return nil, nil, err
 	}
 
+	// Get header of the last L1 block
+	lastL1BlockHeader, err := a.Ethman.GetLatestBlockHeader(ctx)
+	if err != nil {
+		log.Errorf("Failed to get last L1 block header, err: %v", err)
+		return nil, nil, err
+	}
+	lastL1BlockNumber := lastL1BlockHeader.Number.Uint64()
+
+	// Calculate max L1 block number for getting next virtual batch to prove
+	maxL1BlockNumber := uint64(0)
+	if a.cfg.BatchProofL1BlockConfirmations <= lastL1BlockNumber {
+		maxL1BlockNumber = lastL1BlockNumber - a.cfg.BatchProofL1BlockConfirmations
+	}
+	log.Debugf("Max L1 block number for getting next virtual batch to prove: %d", maxL1BlockNumber)
+
 	// Get virtual batch pending to generate proof
-	batchToVerify, err := a.State.GetVirtualBatchToProve(ctx, lastVerifiedBatch.BatchNumber, nil)
+	batchToVerify, err := a.State.GetVirtualBatchToProve(ctx, lastVerifiedBatch.BatchNumber, maxL1BlockNumber, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1062,12 +1077,12 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 
 	inputProver := &prover.StatelessInputProver{
 		PublicInputs: &prover.StatelessPublicInputs{
-			OldStateRoot:      previousBatch.StateRoot.Bytes(),
-			OldAccInputHash:   previousBatch.AccInputHash.Bytes(),
-			OldBatchNum:       previousBatch.BatchNumber,
-			ChainId:           a.cfg.ChainID,
-			ForkId:            a.cfg.ForkId,
-			BatchL2Data:       batchToVerify.BatchL2Data,
+			// OldStateRoot:      previousBatch.StateRoot.Bytes(),
+			OldAccInputHash: previousBatch.AccInputHash.Bytes(),
+			// OldBatchNum:       previousBatch.BatchNumber,
+			// ChainId:           a.cfg.ChainID,
+			// ForkId:            a.cfg.ForkId,
+			// BatchL2Data:       batchToVerify.BatchL2Data,
 			L1InfoRoot:        l1InfoRoot.Bytes(),
 			TimestampLimit:    uint64(batchToVerify.Timestamp.Unix()),
 			SequencerAddr:     batchToVerify.Coinbase.String(),
@@ -1075,8 +1090,8 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 			L1InfoTreeData:    l1InfoTreeData,
 			ForcedBlockhashL1: forcedBlockhashL1.Bytes(),
 		},
-		Db:                map[string]string{},
-		ContractsBytecode: map[string]string{},
+		// Db:                map[string]string{},
+		// ContractsBytecode: map[string]string{},
 	}
 
 	printInputProver(inputProver)
@@ -1085,12 +1100,12 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 }
 
 func printInputProver(inputProver *prover.StatelessInputProver) {
-	log.Debugf("OldStateRoot: %v", common.BytesToHash(inputProver.PublicInputs.OldStateRoot))
+	// log.Debugf("OldStateRoot: %v", common.BytesToHash(inputProver.PublicInputs.OldStateRoot))
 	log.Debugf("OldAccInputHash: %v", common.BytesToHash(inputProver.PublicInputs.OldAccInputHash))
-	log.Debugf("OldBatchNum: %v", inputProver.PublicInputs.OldBatchNum)
-	log.Debugf("ChainId: %v", inputProver.PublicInputs.ChainId)
-	log.Debugf("ForkId: %v", inputProver.PublicInputs.ForkId)
-	log.Debugf("BatchL2Data: %v", common.Bytes2Hex(inputProver.PublicInputs.BatchL2Data))
+	// log.Debugf("OldBatchNum: %v", inputProver.PublicInputs.OldBatchNum)
+	// log.Debugf("ChainId: %v", inputProver.PublicInputs.ChainId)
+	// log.Debugf("ForkId: %v", inputProver.PublicInputs.ForkId)
+	// log.Debugf("BatchL2Data: %v", common.Bytes2Hex(inputProver.PublicInputs.BatchL2Data))
 	log.Debugf("L1InfoRoot: %v", common.BytesToHash(inputProver.PublicInputs.L1InfoRoot))
 	log.Debugf("TimestampLimit: %v", inputProver.PublicInputs.TimestampLimit)
 	log.Debugf("SequencerAddr: %v", inputProver.PublicInputs.SequencerAddr)

@@ -160,7 +160,7 @@ func (s *State) StoreTransactions(ctx context.Context, batchNumber uint64, proce
 				Coinbase:   processingContext.Coinbase,
 				Root:       processedTx.StateRoot,
 				GasUsed:    processedTx.GasUsed,
-				GasLimit:   s.cfg.MaxCumulativeGasUsed,
+				GasLimit:   processedBlock.GasLimit,
 				Time:       uint64(processingContext.Timestamp.Unix()),
 			})
 			header.GlobalExitRoot = processedBlock.GlobalExitRoot
@@ -174,7 +174,8 @@ func (s *State) StoreTransactions(ctx context.Context, batchNumber uint64, proce
 			receipts := []*types.Receipt{receipt}
 
 			// Create l2Block to be able to calculate its hash
-			l2Block := NewL2Block(header, transactions, []*L2Header{}, receipts, &trie.StackTrie{})
+			st := trie.NewStackTrie(nil)
+			l2Block := NewL2Block(header, transactions, []*L2Header{}, receipts, st)
 			l2Block.ReceivedAt = processingContext.Timestamp
 
 			receipt.BlockHash = l2Block.Hash()
@@ -203,13 +204,23 @@ func (s *State) StoreL2Block(ctx context.Context, batchNumber uint64, l2Block *P
 	log.Debugf("storing l2 block %d, txs %d, hash %s", l2Block.BlockNumber, len(l2Block.TransactionResponses), l2Block.BlockHash.String())
 	start := time.Now()
 
+	prevL2BlockHash, err := s.GetL2BlockHashByNumber(ctx, l2Block.BlockNumber-1, dbTx)
+	if err != nil {
+		return err
+	}
+
+	gasLimit := l2Block.GasLimit
+	if gasLimit > MaxL2BlockGasLimit {
+		gasLimit = MaxL2BlockGasLimit
+	}
+
 	header := &types.Header{
 		Number:     new(big.Int).SetUint64(l2Block.BlockNumber),
-		ParentHash: l2Block.ParentHash,
+		ParentHash: prevL2BlockHash,
 		Coinbase:   l2Block.Coinbase,
-		Root:       l2Block.BlockHash, //BlockHash is the StateRoot in Etrog
+		Root:       l2Block.BlockHash, //BlockHash returned by the executor is the StateRoot in Etrog
 		GasUsed:    l2Block.GasUsed,
-		GasLimit:   s.cfg.MaxCumulativeGasUsed,
+		GasLimit:   gasLimit,
 		Time:       l2Block.Timestamp,
 	}
 
@@ -268,6 +279,16 @@ func (s *State) StoreL2Block(ctx context.Context, batchNumber uint64, l2Block *P
 	return nil
 }
 
+// PreProcessUnsignedTransaction processes the unsigned transaction in order to calculate its zkCounters
+func (s *State) PreProcessUnsignedTransaction(ctx context.Context, tx *types.Transaction, sender common.Address, l2BlockNumber *uint64, dbTx pgx.Tx) (*ProcessBatchResponse, error) {
+	response, err := s.internalProcessUnsignedTransaction(ctx, tx, sender, l2BlockNumber, false, dbTx)
+	if err != nil {
+		return response, err
+	}
+
+	return response, nil
+}
+
 // PreProcessTransaction processes the transaction in order to calculate its zkCounters before adding it to the pool
 func (s *State) PreProcessTransaction(ctx context.Context, tx *types.Transaction, dbTx pgx.Tx) (*ProcessBatchResponse, error) {
 	sender, err := GetSender(*tx)
@@ -299,7 +320,7 @@ func (s *State) ProcessUnsignedTransaction(ctx context.Context, tx *types.Transa
 	result.StateRoot = r.StateRoot.Bytes()
 
 	if errors.Is(r.RomError, runtime.ErrExecutionReverted) {
-		result.Err = constructErrorFromRevert(r.RomError, r.ReturnValue)
+		result.Err = ConstructErrorFromRevert(r.RomError, r.ReturnValue)
 	} else {
 		result.Err = r.RomError
 	}
@@ -575,14 +596,17 @@ func (s *State) internalProcessUnsignedTransactionV2(ctx context.Context, tx *ty
 		return nil, err
 	}
 
-	if processBatchResponseV2.ErrorRom != executor.RomError_ROM_ERROR_NO_ERROR {
-		err = executor.RomErr(processBatchResponseV2.ErrorRom)
-		s.eventLog.LogExecutorErrorV2(ctx, processBatchResponseV2.Error, processBatchRequestV2)
+	response, err := s.convertToProcessBatchResponseV2(processBatchResponseV2)
+	if err != nil {
 		return nil, err
 	}
 
-	response, err := s.convertToProcessBatchResponseV2(processBatchResponseV2)
-	if err != nil {
+	if processBatchResponseV2.ErrorRom != executor.RomError_ROM_ERROR_NO_ERROR {
+		err = executor.RomErr(processBatchResponseV2.ErrorRom)
+		if executor.IsROMOutOfCountersError(executor.RomErrorCode(err)) {
+			return response, err
+		}
+
 		return nil, err
 	}
 
@@ -624,7 +648,7 @@ func (s *State) StoreTransaction(ctx context.Context, batchNumber uint64, proces
 		Coinbase:   coinbase,
 		Root:       processedTx.StateRoot,
 		GasUsed:    processedTx.GasUsed,
-		GasLimit:   s.cfg.MaxCumulativeGasUsed,
+		GasLimit:   MaxTxGasLimit,
 		Time:       timestamp,
 	})
 	header.GlobalExitRoot = globalExitRoot
@@ -635,7 +659,8 @@ func (s *State) StoreTransaction(ctx context.Context, batchNumber uint64, proces
 	receipts := []*types.Receipt{receipt}
 
 	// Create l2Block to be able to calculate its hash
-	l2Block := NewL2Block(header, transactions, []*L2Header{}, receipts, &trie.StackTrie{})
+	st := trie.NewStackTrie(nil)
+	l2Block := NewL2Block(header, transactions, []*L2Header{}, receipts, st)
 	l2Block.ReceivedAt = time.Unix(int64(timestamp), 0)
 
 	receipt.BlockHash = l2Block.Hash()
@@ -700,7 +725,7 @@ func (s *State) EstimateGas(transaction *types.Transaction, senderAddress common
 	}
 	nonce := loadedNonce.Uint64()
 
-	highEnd := s.cfg.MaxCumulativeGasUsed
+	highEnd := MaxTxGasLimit
 
 	// if gas price is set, set the highEnd to the max amount
 	// of the account afford
@@ -925,7 +950,7 @@ func (s *State) internalTestGasEstimationTransactionV1(ctx context.Context, batc
 			// The EVM reverted during execution, attempt to extract the
 			// error message and return it
 			returnValue := txResponse.ReturnValue
-			return true, true, gasUsed, returnValue, constructErrorFromRevert(err, returnValue)
+			return true, true, gasUsed, returnValue, ConstructErrorFromRevert(err, returnValue)
 		}
 
 		return true, false, gasUsed, nil, err
@@ -1007,7 +1032,6 @@ func (s *State) internalTestGasEstimationTransactionV2(ctx context.Context, batc
 		s.eventLog.LogExecutorErrorV2(ctx, processBatchResponseV2.Error, processBatchRequestV2)
 		return false, false, gasUsed, nil, err
 	}
-
 	if processBatchResponseV2.ErrorRom != executor.RomError_ROM_ERROR_NO_ERROR {
 		err = executor.RomErr(processBatchResponseV2.ErrorRom)
 		s.eventLog.LogExecutorErrorV2(ctx, processBatchResponseV2.Error, processBatchRequestV2)
@@ -1032,7 +1056,7 @@ func (s *State) internalTestGasEstimationTransactionV2(ctx context.Context, batc
 			// The EVM reverted during execution, attempt to extract the
 			// error message and return it
 			returnValue := txResponse.ReturnValue
-			return true, true, gasUsed, returnValue, constructErrorFromRevert(err, returnValue)
+			return true, true, gasUsed, returnValue, ConstructErrorFromRevert(err, returnValue)
 		}
 
 		return true, false, gasUsed, nil, err
