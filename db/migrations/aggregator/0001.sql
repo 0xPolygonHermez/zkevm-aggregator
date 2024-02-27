@@ -17,3 +17,4 @@ CREATE TABLE aggregator.proof (
 	generating_since timestamptz NULL,
     PRIMARY KEY (batch_num, batch_num_final)
 );
+
