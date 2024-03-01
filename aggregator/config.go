@@ -6,6 +6,8 @@ import (
 
 	"github.com/0xPolygonHermez/zkevm-aggregator/config/types"
 	"github.com/0xPolygonHermez/zkevm-aggregator/encoding"
+	"github.com/0xPolygonHermez/zkevm-aggregator/log"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
 )
 
 // TokenAmountWithDecimals is a wrapper type that parses token amount with decimals to big int
@@ -91,4 +93,24 @@ type Config struct {
 
 	// BatchProofL1BlockConfirmations is number of L1 blocks to consider we can generate the proof for a virtual batch
 	BatchProofL1BlockConfirmations uint64 `mapstructure:"BatchProofL1BlockConfirmations"`
+
+	// WitnessURL is the URL of the witness server
+	WitnessURL string `mapstructure:"WitnessURL"`
+
+	// StreamClient is the config for the stream client
+	StreamClient StreamClientCfg `mapstructure:"StreamClient"`
+
+	// EthTxManager is the config for the ethtxmanager
+	EthTxManager ethtxmanager.Config `mapstructure:"EthTxManager"`
+
+	// Log is the log configuration
+	Log log.Config `mapstructure:"Log"`
+}
+
+// StreamClientCfg contains the data streamer's configuration properties
+type StreamClientCfg struct {
+	// Datastream server to connect
+	Server string `mapstructure:"Server"`
+	// Log is the log configuration
+	Log log.Config `mapstructure:"Log"`
 }

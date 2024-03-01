@@ -7,7 +7,6 @@ import (
 	"github.com/0xPolygonHermez/zkevm-aggregator/aggregator/prover"
 	ethmanTypes "github.com/0xPolygonHermez/zkevm-aggregator/etherman/types"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/jackc/pgx/v4"
@@ -27,15 +26,6 @@ type proverInterface interface {
 	WaitFinalProof(ctx context.Context, proofID string) (*prover.FinalProof, error)
 }
 
-// ethTxManager contains the methods required to send txs to
-// ethereum.
-type ethTxManager interface {
-	Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte) (common.Hash, error)
-	Result(ctx context.Context, id common.Hash) (ethtxmanager.MonitoredTxResult, error)
-	ResultsByStatus(ctx context.Context, statuses []ethtxmanager.MonitoredTxStatus) ([]ethtxmanager.MonitoredTxResult, error)
-	ProcessPendingMonitoredTxs(ctx context.Context, resultHandler ethtxmanager.ResultHandler)
-}
-
 // etherman contains the methods required to interact with ethereum
 type etherman interface {
 	GetLatestVerifiedBatchNum() (uint64, error)
@@ -53,20 +43,12 @@ type aggregatorTxProfitabilityChecker interface {
 type stateInterface interface {
 	BeginStateTransaction(ctx context.Context) (pgx.Tx, error)
 	CheckProofContainsCompleteSequences(ctx context.Context, proof *state.Proof, dbTx pgx.Tx) (bool, error)
-	GetLastVerifiedBatch(ctx context.Context, dbTx pgx.Tx) (*state.VerifiedBatch, error)
 	GetProofReadyToVerify(ctx context.Context, lastVerfiedBatchNumber uint64, dbTx pgx.Tx) (*state.Proof, error)
-	GetVirtualBatchToProve(ctx context.Context, lastVerfiedBatchNumber uint64, maxL1Block uint64, dbTx pgx.Tx) (*state.Batch, error)
 	GetProofsToAggregate(ctx context.Context, dbTx pgx.Tx) (*state.Proof, *state.Proof, error)
-	GetBatchByNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (*state.Batch, error)
 	AddGeneratedProof(ctx context.Context, proof *state.Proof, dbTx pgx.Tx) error
 	UpdateGeneratedProof(ctx context.Context, proof *state.Proof, dbTx pgx.Tx) error
 	DeleteGeneratedProofs(ctx context.Context, batchNumber uint64, batchNumberFinal uint64, dbTx pgx.Tx) error
 	DeleteUngeneratedProofs(ctx context.Context, dbTx pgx.Tx) error
 	CleanupGeneratedProofs(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) error
 	CleanupLockedProofs(ctx context.Context, duration string, dbTx pgx.Tx) (int64, error)
-	GetL1InfoRootLeafByIndex(ctx context.Context, l1InfoTreeIndex uint32, dbTx pgx.Tx) (state.L1InfoTreeExitRootStorageEntry, error)
-	GetLeafsByL1InfoRoot(ctx context.Context, l1InfoRoot common.Hash, dbTx pgx.Tx) ([]state.L1InfoTreeExitRootStorageEntry, error)
-	GetVirtualBatchParentHash(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (common.Hash, error)
-	GetForcedBatchParentHash(ctx context.Context, forcedBatchNumber uint64, dbTx pgx.Tx) (common.Hash, error)
-	GetVirtualBatch(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (*state.VirtualBatch, error)
 }

@@ -27,7 +27,6 @@ import (
 	"github.com/0xPolygonHermez/zkevm-aggregator/state"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state/pgstatestorage"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state/runtime/executor"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
@@ -111,11 +110,6 @@ func start(cliCtx *cli.Context) error {
 	// If the aggregator is restarted before the end of the sync process, this currentForkID could be wrong
 	c.Aggregator.ForkId = currentForkID
 
-	etm, err := ethtxmanager.New(c.EthTxManager)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	ev := &event.Event{
 		ReceivedAt: time.Now(),
 		Source:     event.Source_Node,
@@ -135,7 +129,7 @@ func start(cliCtx *cli.Context) error {
 			if err != nil {
 				log.Fatal(err)
 			}
-			go runAggregator(cliCtx.Context, c.Aggregator, etherman, etm, st)
+			go runAggregator(cliCtx.Context, c.Aggregator, etherman, st)
 		}
 	}
 
@@ -175,8 +169,8 @@ func newEtherman(c config.Config) (*etherman.Client, error) {
 	return etherman.NewClient(c.Etherman, c.NetworkConfig.L1Config)
 }
 
-func runAggregator(ctx context.Context, c aggregator.Config, etherman *etherman.Client, ethTxManager *ethtxmanager.Client, st *state.State) {
-	agg, err := aggregator.New(c, st, ethTxManager, etherman)
+func runAggregator(ctx context.Context, c aggregator.Config, etherman *etherman.Client, st *state.State) {
+	agg, err := aggregator.New(c, st, etherman)
 	if err != nil {
 		log.Fatal(err)
 	}
