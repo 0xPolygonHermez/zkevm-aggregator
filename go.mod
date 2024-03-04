@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/0xPolygonHermez/zkevm-data-streamer v0.2.0
 	github.com/dop251/goja v0.0.0-20230806174421-c933cf95e127
-	github.com/ethereum/go-ethereum v1.13.13
+	github.com/ethereum/go-ethereum v1.13.14
 	github.com/gobuffalo/packr/v2 v2.8.3
 	github.com/google/uuid v1.5.0
 	github.com/hermeznetwork/tracerr v0.3.2
