@@ -270,16 +270,9 @@ func (a *Aggregator) sendFinalProof() {
 			a.startProofVerification()
 
 			// finalBatch, err := a.state.GetBatchByNumber(ctx, proof.BatchNumberFinal, nil)
-			finalBatchData, err := a.getBatchFromDataStream(proof.BatchNumberFinal)
+			_, finalBatch, err := a.getBatchFromDataStream(proof.BatchNumberFinal)
 			if err != nil {
 				log.Errorf("Failed to retrieve batch with number [%d]: %v", proof.BatchNumberFinal, err)
-				a.endProofVerification()
-				continue
-			}
-
-			finalBatch, err := a.convertStreamDataToBatch(finalBatchData)
-			if err != nil {
-				log.Errorf("Failed to convert stream data to batch: %v", err)
 				a.endProofVerification()
 				continue
 			}
@@ -360,13 +353,9 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, prover proverInterface
 	if string(finalProof.Public.NewStateRoot) == mockedStateRoot && string(finalProof.Public.NewLocalExitRoot) == mockedLocalExitRoot {
 		// This local exit root and state root come from the mock
 		// prover, use the one captured by the executor instead
-		finalBatchData, err := a.getBatchFromDataStream(proof.BatchNumberFinal)
+		_, finalBatch, err := a.getBatchFromDataStream(proof.BatchNumberFinal)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
-		}
-		finalBatch, err := a.convertStreamDataToBatch(finalBatchData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert stream data to batch: %w", err)
 		}
 		log.Warnf("NewLocalExitRoot and NewStateRoot look like a mock values, using values from executor instead: LER: %v, SR: %v",
 			finalBatch.LocalExitRoot.TerminalString(), finalBatch.StateRoot.TerminalString())
@@ -757,7 +746,7 @@ func (a *Aggregator) tryAggregateProofs(ctx context.Context, prover proverInterf
 	return true, nil
 }
 
-func (a *Aggregator) getBatchFromDataStream(batchNumber uint64) ([]byte, error) {
+func (a *Aggregator) getBatchFromDataStream(batchNumber uint64) ([]byte, *state.Batch, error) {
 	var response []byte
 
 	fromBatchBookMark := state.DSBookMark{
@@ -772,29 +761,68 @@ func (a *Aggregator) getBatchFromDataStream(batchNumber uint64) ([]byte, error) 
 
 	fromEntry, err := a.streamClient.ExecCommandGetBookmark(fromBatchBookMark.Encode())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	toEntry, err := a.streamClient.ExecCommandGetBookmark(toBatchBookMark.Encode())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
+	l2BlockStart := state.DSL2BlockStart{}.Decode(fromEntry.Data)
+	batch := state.Batch{
+		BatchNumber:    batchNumber,
+		Coinbase:       l2BlockStart.Coinbase,
+		GlobalExitRoot: l2BlockStart.GlobalExitRoot,
+		LocalExitRoot:  l2BlockStart.LocalExitRoot,
+	}
+
+	batchRaw := state.BatchRawV2{
+		Blocks: make([]state.L2BlockRaw, 0),
+	}
+	var currentL2Block state.L2BlockRaw
 
 	for fromEntry.Number < toEntry.Number {
 		response = append(response, fromEntry.Data...)
 		entry, err := a.streamClient.ExecCommandGetEntry(fromEntry.Number + 1)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+
+		switch entry.Type {
+		case state.EntryTypeL2BlockStart:
+			l2BlockStart := state.DSL2BlockStart{}.Decode(entry.Data)
+			header := state.ChangeL2BlockHeader{
+				DeltaTimestamp:  l2BlockStart.DeltaTimestamp,
+				IndexL1InfoTree: l2BlockStart.L1InfoTreeIndex,
+			}
+			currentL2Block.ChangeL2BlockHeader = header
+			currentL2Block.Transactions = make([]state.L2TxRaw, 0)
+		case state.EntryTypeL2Tx:
+			l2Tx := state.DSL2Transaction{}.Decode(entry.Data)
+			l2TxRaw := state.L2TxRaw{
+				EfficiencyPercentage: l2Tx.EffectiveGasPricePercentage,
+				TxAlreadyEncoded:     true,
+				Data:                 l2Tx.Encoded,
+			}
+			currentL2Block.Transactions = append(currentL2Block.Transactions, l2TxRaw)
+		case state.EntryTypeL2BlockEnd:
+			l2BlockEnd := state.DSL2BlockEnd{}.Decode(entry.Data)
+			batchRaw.Blocks = append(batchRaw.Blocks, currentL2Block)
+			batch.StateRoot = l2BlockEnd.StateRoot
 		}
 
 		fromEntry = entry
 	}
 
-	return response, nil
-}
+	batchl2Data, err := state.EncodeBatchV2(&batchRaw)
+	if err != nil {
+		return nil, nil, err
+	}
 
-func (a *Aggregator) convertStreamDataToBatch(streamData []byte) (*state.Batch, error) {
-	return nil, nil
+	batch.BatchL2Data = batchl2Data
+
+	return response, &batch, nil
 }
 
 func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverInterface) ([]byte, uint64, *state.Proof, error) {
@@ -819,7 +847,7 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 	batchNumberToVerify := lastVerifiedBatchNumber + 1
 
 	// Get virtual batch pending to generate proof from the data stream
-	batchDataToVerify, err := a.getBatchFromDataStream(batchNumberToVerify)
+	batchDataToVerify, _, err := a.getBatchFromDataStream(batchNumberToVerify)
 	if err != nil {
 		return nil, batchNumberToVerify, nil, err
 	}
@@ -1105,7 +1133,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchDataToVerify []b
 			// OldAccInputHash:   previousBatch.AccInputHash.Bytes(),
 			// L1InfoRoot:        l1InfoRoot.Bytes(),
 			// TimestampLimit:    uint64(batchDataToVerify.Timestamp.Unix()),
-			//SequencerAddr:     batchDataToVerify.Coinbase.String(),
+			// SequencerAddr:     batchDataToVerify.Coinbase.String(),
 			AggregatorAddr: a.cfg.SenderAddress,
 			// L1InfoTreeData:    l1InfoTreeData,
 			// ForcedBlockhashL1: forcedBlockhashL1.Bytes(),
