@@ -770,30 +770,24 @@ func (a *Aggregator) getBatchFromDataStream(batchNumber uint64) ([]byte, error) 
 		Value: batchNumber + 1,
 	}
 
-	a.streamClient.FromBookmark = fromBatchBookMark.Encode()
-	err := a.streamClient.ExecCommand(datastreamer.CmdBookmark)
+	fromEntry, err := a.streamClient.ExecCommandGetBookmark(fromBatchBookMark.Encode())
 	if err != nil {
 		return nil, err
 	}
-	fromEntry := a.streamClient.Entry
 
-	a.streamClient.FromBookmark = toBatchBookMark.Encode()
-	err = a.streamClient.ExecCommand(datastreamer.CmdBookmark)
+	toEntry, err := a.streamClient.ExecCommandGetBookmark(toBatchBookMark.Encode())
 	if err != nil {
 		return nil, err
 	}
-	toEntry := a.streamClient.Entry
 
 	for fromEntry.Number < toEntry.Number {
 		response = append(response, fromEntry.Data...)
-
-		a.streamClient.FromEntry = fromEntry.Number + 1
-		err = a.streamClient.ExecCommand(datastreamer.CmdEntry)
+		entry, err := a.streamClient.ExecCommandGetEntry(fromEntry.Number + 1)
 		if err != nil {
 			return nil, err
 		}
 
-		fromEntry = a.streamClient.Entry
+		fromEntry = entry
 	}
 
 	return response, nil
