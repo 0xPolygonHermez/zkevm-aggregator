@@ -1147,7 +1147,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchDataToVerify []b
 
 func getWitness(batchNumber uint64, URL string) ([]byte, error) {
 	var witness string
-	response, err := rpclient.JSONRPCCall(URL, "txpool_content", nil, batchNumber)
+	response, err := rpclient.JSONRPCCall(URL, "zkevm_getBatchWitness", nil, batchNumber)
 	if err != nil {
 		return nil, err
 	}
