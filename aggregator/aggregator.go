@@ -775,7 +775,6 @@ func (a *Aggregator) getBatchFromDataStream(batchNumber uint64) ([]byte, *state.
 		Coinbase:       l2BlockStart.Coinbase,
 		GlobalExitRoot: l2BlockStart.GlobalExitRoot,
 		LocalExitRoot:  l2BlockStart.LocalExitRoot,
-		Timestamp:      time.Unix(int64(l2BlockStart.Timestamp), 0),
 	}
 
 	batchRaw := state.BatchRawV2{
