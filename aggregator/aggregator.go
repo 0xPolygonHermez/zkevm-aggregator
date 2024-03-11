@@ -1174,7 +1174,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchDataToVerify []b
 		return nil, fmt.Errorf("failed to get oldAccInputHash for batch %d", batchToVerify.BatchNumber)
 	}
 
-	accInputHash, err := calculateAccInputHash(oldAccInputHash, batchDataToVerify, l1InfoRoot, uint64(batchToVerify.Timestamp.Unix()), batchToVerify.Coinbase, forcedBlockhashL1)
+	accInputHash, err := calculateAccInputHash(oldAccInputHash, batchToVerify.BatchL2Data, l1InfoRoot, uint64(batchToVerify.Timestamp.Unix()), batchToVerify.Coinbase, forcedBlockhashL1)
 	if err != nil {
 		return nil, err
 	}
