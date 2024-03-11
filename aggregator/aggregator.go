@@ -24,6 +24,7 @@ import (
 	ethtxlog "github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
 	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/synchronizer"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/iden3/go-iden3-crypto/keccak256"
 	"google.golang.org/grpc"
 	grpchealth "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/peer"
@@ -1205,7 +1206,34 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchDataToVerify []b
 }
 
 func calculateAccInputHash(oldAccInputHash common.Hash, batchHashData []byte, l1InfoRoot common.Hash, timestampLimit uint64, sequencerAddr common.Address, forcedBlockhashL1 common.Hash) (common.Hash, error) {
-	return common.Hash{}, nil
+	v1 := oldAccInputHash.Bytes()
+	v2 := batchHashData
+	v3 := l1InfoRoot.Bytes()
+	v4 := big.NewInt(0).SetUint64(timestampLimit).Bytes()
+	v5 := sequencerAddr.Bytes()
+	v6 := forcedBlockhashL1.Bytes()
+
+	// Add 0s to make v1 and v2 32 bytes long
+	for len(v1) < 32 {
+		v1 = append([]byte{0}, v1...)
+	}
+	for len(v2) < 32 {
+		v2 = append([]byte{0}, v2...)
+	}
+	for len(v3) < 32 {
+		v3 = append([]byte{0}, v3...)
+	}
+	for len(v4) < 32 {
+		v4 = append([]byte{0}, v4...)
+	}
+	for len(v5) < 32 {
+		v5 = append([]byte{0}, v5...)
+	}
+	for len(v6) < 32 {
+		v6 = append([]byte{0}, v6...)
+	}
+
+	return common.BytesToHash(keccak256.Hash(v1, v2, v3, v4, v5, v6)), nil
 }
 
 func getWitness(batchNumber uint64, URL string) ([]byte, error) {
