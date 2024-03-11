@@ -1213,7 +1213,7 @@ func calculateAccInputHash(oldAccInputHash common.Hash, batchHashData []byte, l1
 	v5 := sequencerAddr.Bytes()
 	v6 := forcedBlockhashL1.Bytes()
 
-	// Add 0s to make v1 and v2 32 bytes long
+	// Add 0s to make values 32 bytes long
 	for len(v1) < 32 {
 		v1 = append([]byte{0}, v1...)
 	}
