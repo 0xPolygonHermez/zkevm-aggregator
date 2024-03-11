@@ -1717,6 +1717,15 @@ func (etherMan *Client) GetLatestVerifiedBatchNum() (uint64, error) {
 	return lastVerifiedBatchNum, nil
 }
 
+// GetBatchAccInputHash gets the batch accumulated input hash from the ethereum
+func (etherman *Client) GetBatchAccInputHash(ctx context.Context, batchNumber uint64) (common.Hash, error) {
+	rollupData, err := etherman.RollupManager.GetRollupSequencedBatches(&bind.CallOpts{Pending: false}, etherman.RollupID, batchNumber)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return rollupData.AccInputHash, nil
+}
+
 // GetTx function get ethereum tx
 func (etherMan *Client) GetTx(ctx context.Context, txHash common.Hash) (*types.Transaction, bool, error) {
 	return etherMan.EthClient.TransactionByHash(ctx, txHash)

@@ -7,9 +7,9 @@ Outputs = ["stderr"]
 
 [State]
 	[State.DB]
+	Name = "aggregator_db"
 	User = "aggregator_user"
 	Password = "aggregator_password"
-	Name = "aggregator_db"
 	Host = "zkevm-aggregator-db"
 	Port = "5432"
 	EnableLog = false	
@@ -62,6 +62,29 @@ WitnessURL = "http://localhost:8545"
 				MultiGasProvider = false
 				L1ChainID = 1337
 				HTTPHeaders = []
+	[Aggregator.Synchronizer]
+		[Aggregator.Synchronizer.Log]
+		Environment = "development" # "production" or "development"
+		Level = "info"
+		Outputs = ["stderr"]
+		[Aggregator.Synchronizer.DB]
+		Name = "aggregator_db"
+		User = "aggregator_user"
+		Password = "aggregator_password"
+		Host = "localhost"
+		Port = "5432"
+		EnableLog = false
+		MaxConns = 10
+		[Aggregator.Synchronizer.Synchronizer]
+		SyncInterval = "10s"
+		SyncChunkSize = 1000
+		GenesisBlockNumber = 5157839
+		[Aggregator.Synchronizer.Etherman]
+		L1URL = "http://localhost:8545"
+		[Aggregator.Synchronizer.Etherman.Contracts]
+		GlobalExitRootManagerAddr = "0x2968D6d736178f8FE7393CC33C87f29D9C287e78"
+		RollupManagerAddr = "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764"
+		ZkEVMAddr = "0x89BA0Ed947a88fe43c22Ae305C0713eC8a7Eb361"
 
 [EventLog]
 	[EventLog.DB]

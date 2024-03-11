@@ -31,6 +31,7 @@ type etherman interface {
 	GetLatestVerifiedBatchNum() (uint64, error)
 	BuildTrustedVerifyBatchesTxData(lastVerifiedBatch, newVerifiedBatch uint64, inputs *ethmanTypes.FinalProofInputs, beneficiary common.Address) (to *common.Address, data []byte, err error)
 	GetLatestBlockHeader(ctx context.Context) (*types.Header, error)
+	GetBatchAccInputHash(ctx context.Context, batchNumber uint64) (common.Hash, error)
 }
 
 // aggregatorTxProfitabilityChecker interface for different profitability

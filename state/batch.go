@@ -34,12 +34,13 @@ const (
 
 // Batch struct
 type Batch struct {
-	BatchNumber   uint64
-	Coinbase      common.Address
-	BatchL2Data   []byte
-	StateRoot     common.Hash
-	LocalExitRoot common.Hash
-	AccInputHash  common.Hash
+	BatchNumber     uint64
+	Coinbase        common.Address
+	BatchL2Data     []byte
+	StateRoot       common.Hash
+	LocalExitRoot   common.Hash
+	AccInputHash    common.Hash
+	L1InfoTreeIndex uint32
 	// Timestamp (<=incaberry) -> batch time
 	// 			 (>incaberry) -> minTimestamp used in batch creation, real timestamp is in virtual_batch.batch_timestamp
 	Timestamp      time.Time

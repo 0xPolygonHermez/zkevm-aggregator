@@ -169,8 +169,8 @@ func newEtherman(c config.Config) (*etherman.Client, error) {
 	return etherman.NewClient(c.Etherman, c.NetworkConfig.L1Config)
 }
 
-func runAggregator(ctx context.Context, c aggregator.Config, etherman *etherman.Client, st *state.State) {
-	agg, err := aggregator.New(c, st, etherman)
+func runAggregator(ctx context.Context, config aggregator.Config, etherman *etherman.Client, st *state.State) {
+	agg, err := aggregator.New(ctx, config, st, etherman)
 	if err != nil {
 		log.Fatal(err)
 	}

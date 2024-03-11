@@ -8,6 +8,7 @@ import (
 	"github.com/0xPolygonHermez/zkevm-aggregator/encoding"
 	"github.com/0xPolygonHermez/zkevm-aggregator/log"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
+	syncronizerConfig "github.com/0xPolygonHermez/zkevm-synchronizer-l1/config"
 )
 
 // TokenAmountWithDecimals is a wrapper type that parses token amount with decimals to big int
@@ -105,6 +106,9 @@ type Config struct {
 
 	// Log is the log configuration
 	Log log.Config `mapstructure:"Log"`
+
+	// Synchornizer config
+	Synchronizer syncronizerConfig.Config `mapstructure:"Synchronizer"`
 }
 
 // StreamClientCfg contains the data streamer's configuration properties
