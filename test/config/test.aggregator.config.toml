@@ -41,9 +41,9 @@ CleanupLockedProofsInterval = "2m"
 GeneratingProofCleanupThreshold = "10m"
 UpgradeEtrogBatchNumber = 0
 BatchProofL1BlockConfirmations = 2
-WitnessURL = "http://localhost:8545"
+WitnessURL = "http://cdk-erigon:9545"
 	[Aggregator.StreamClient]
-		Server = "127.0.0.1:6900"
+		Server = "datastream.internal.zkevm-rpc.com:6900"
 	[Aggregator.EthTxManager]
 		FrequencyToMonitorTxs = "1s"
 		WaitTxToBeMined = "2m"
@@ -51,14 +51,14 @@ WitnessURL = "http://localhost:8545"
 		FinalizationL1ConfirmationBlocks = 10
 		WaitReceiptToBeGenerated = "8s"
 		PrivateKeys = [
-			{Path = "./test/aggregator.keystore", Password = "testonly"},
+			{Path = "/pk/aggregator.keystore", Password = "testonly"},
 		]
 		ForcedGas = 0
 		GasPriceMarginFactor = 1
 		MaxGasPriceLimit = 0
 		PersistenceFilename = "ethtxmanager_aggregator.json"
 			[Aggregator.EthTxManager.Etherman]
-				URL = "http://127.0.0.1:8545"
+				URL = "http://zkevm-mock-l1-network:8545"
 				MultiGasProvider = false
 				L1ChainID = 1337
 				HTTPHeaders = []
@@ -68,10 +68,10 @@ WitnessURL = "http://localhost:8545"
 		Level = "info"
 		Outputs = ["stderr"]
 		[Aggregator.Synchronizer.DB]
-		Name = "aggregator_db"
-		User = "aggregator_user"
-		Password = "aggregator_password"
-		Host = "localhost"
+		Name = "sync"
+		User = "test_user"
+		Password = "test_password"
+		Host = "zkevm-l1-sync-db"
 		Port = "5432"
 		EnableLog = false
 		MaxConns = 10
@@ -80,11 +80,18 @@ WitnessURL = "http://localhost:8545"
 		SyncChunkSize = 1000
 		GenesisBlockNumber = 5157839
 		[Aggregator.Synchronizer.Etherman]
-		L1URL = "http://localhost:8545"
+		L1URL = "http://zkevm-mock-l1-network:8545"
 		[Aggregator.Synchronizer.Etherman.Contracts]
-		GlobalExitRootManagerAddr = "0x2968D6d736178f8FE7393CC33C87f29D9C287e78"
-		RollupManagerAddr = "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764"
-		ZkEVMAddr = "0x89BA0Ed947a88fe43c22Ae305C0713eC8a7Eb361"
+		GlobalExitRootManagerAddr = "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318"
+		RollupManagerAddr = "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
+		ZkEVMAddr = "0x8dAF17A20c9DBA35f005b6324F493785D239719d"
+
+[Etherman]
+URL = "http://zkevm-mock-l1-network:8545"
+ForkIDChunkSize = 20000
+MultiGasProvider = false
+	[Etherscan]
+		ApiKey = ""
 
 [EventLog]
 	[EventLog.DB]

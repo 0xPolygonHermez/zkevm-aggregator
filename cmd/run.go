@@ -20,13 +20,10 @@ import (
 	"github.com/0xPolygonHermez/zkevm-aggregator/event"
 	"github.com/0xPolygonHermez/zkevm-aggregator/event/nileventstorage"
 	"github.com/0xPolygonHermez/zkevm-aggregator/event/pgeventstorage"
-	"github.com/0xPolygonHermez/zkevm-aggregator/l1infotree"
 	"github.com/0xPolygonHermez/zkevm-aggregator/log"
-	"github.com/0xPolygonHermez/zkevm-aggregator/merkletree"
 	"github.com/0xPolygonHermez/zkevm-aggregator/metrics"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state/pgstatestorage"
-	"github.com/0xPolygonHermez/zkevm-aggregator/state/runtime/executor"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
@@ -60,10 +57,9 @@ func start(cliCtx *cli.Context) error {
 	checkAggregatorMigrations(c.State.DB)
 
 	var (
-		eventLog                      *event.EventLog
-		eventStorage                  event.Storage
-		cancelFuncs                   []context.CancelFunc
-		needsExecutor, needsStateTree bool
+		eventLog     *event.EventLog
+		eventStorage event.Storage
+		cancelFuncs  []context.CancelFunc
 	)
 
 	if c.EventLog.DB.Name != "" {
@@ -96,19 +92,24 @@ func start(cliCtx *cli.Context) error {
 		log.Fatal(err)
 	}
 
-	st := newState(cliCtx.Context, c, l2ChainID, []state.ForkIDInterval{}, stateSqlDB, eventLog, needsExecutor, needsStateTree)
-	forkIDIntervals, err := forkIDIntervals(cliCtx.Context, st, etherman, c.NetworkConfig.Genesis.BlockNumber)
-	if err != nil {
-		log.Fatal("error getting forkIDs. Error: ", err)
-	}
-	st.UpdateForkIDIntervalsInMemory(forkIDIntervals)
+	st := newState(cliCtx.Context, c, l2ChainID, []state.ForkIDInterval{}, stateSqlDB, eventLog)
+	/*
+		forkIDIntervals, err := forkIDIntervals(cliCtx.Context, st, etherman, c.NetworkConfig.Genesis.BlockNumber)
+		if err != nil {
+			log.Fatal("error getting forkIDs. Error: ", err)
+		}
+		st.UpdateForkIDIntervalsInMemory(forkIDIntervals)
 
-	currentForkID := forkIDIntervals[len(forkIDIntervals)-1].ForkId
-	log.Infof("Fork ID read from POE SC = %v", forkIDIntervals[len(forkIDIntervals)-1].ForkId)
+		currentForkID := forkIDIntervals[len(forkIDIntervals)-1].ForkId
+		log.Infof("Fork ID read from POE SC = %v", forkIDIntervals[len(forkIDIntervals)-1].ForkId)
+
+		log.Infof("Chain ID read from POE SC = %v", l2ChainID)
+		// If the aggregator is restarted before the end of the sync process, this currentForkID could be wrong
+		c.Aggregator.ForkId = currentForkID
+	*/
+
 	c.Aggregator.ChainID = l2ChainID
-	log.Infof("Chain ID read from POE SC = %v", l2ChainID)
-	// If the aggregator is restarted before the end of the sync process, this currentForkID could be wrong
-	c.Aggregator.ForkId = currentForkID
+	c.Aggregator.ForkId = 8
 
 	ev := &event.Event{
 		ReceivedAt: time.Now(),
@@ -198,21 +199,8 @@ func waitSignal(cancelFuncs []context.CancelFunc) {
 	}
 }
 
-func newState(ctx context.Context, c *config.Config, l2ChainID uint64, forkIDIntervals []state.ForkIDInterval, sqlDB *pgxpool.Pool, eventLog *event.EventLog, needsExecutor, needsStateTree bool) *state.State {
+func newState(ctx context.Context, c *config.Config, l2ChainID uint64, forkIDIntervals []state.ForkIDInterval, sqlDB *pgxpool.Pool, eventLog *event.EventLog) *state.State {
 	stateDb := pgstatestorage.NewPostgresStorage(c.State, sqlDB)
-
-	// Executor
-	var executorClient executor.ExecutorServiceClient
-	if needsExecutor {
-		executorClient, _, _ = executor.NewExecutorClient(ctx, c.Executor)
-	}
-
-	// State Tree
-	var stateTree *merkletree.StateTree
-	if needsStateTree {
-		stateDBClient, _, _ := merkletree.NewMTDBServiceClient(ctx, c.MTClient)
-		stateTree = merkletree.NewStateTree(stateDBClient)
-	}
 
 	stateCfg := state.Config{
 		MaxCumulativeGasUsed:         c.State.Batch.Constraints.MaxCumulativeGasUsed,
@@ -223,20 +211,8 @@ func newState(ctx context.Context, c *config.Config, l2ChainID uint64, forkIDInt
 		ForkUpgradeBatchNumber:       c.ForkUpgradeBatchNumber,
 		ForkUpgradeNewForkId:         c.ForkUpgradeNewForkId,
 	}
-	allLeaves, err := stateDb.GetAllL1InfoRootEntries(ctx, nil)
-	if err != nil {
-		log.Fatal("error getting all leaves. Error: ", err)
-	}
-	var leaves [][32]byte
-	for _, leaf := range allLeaves {
-		leaves = append(leaves, leaf.Hash())
-	}
-	mt, err := l1infotree.NewL1InfoTree(uint8(32), leaves) //nolint:gomnd
-	if err != nil {
-		log.Fatal("error creating L1InfoTree. Error: ", err)
-	}
 
-	st := state.NewState(stateCfg, stateDb, executorClient, stateTree, eventLog, mt)
+	st := state.NewState(stateCfg, stateDb, nil, nil, eventLog, nil)
 	return st
 }
 
