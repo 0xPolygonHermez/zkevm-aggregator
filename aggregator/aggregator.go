@@ -106,6 +106,7 @@ func New(ctx context.Context, cfg Config, stateInterface stateInterface, etherma
 	}
 
 	// Create L1 synchronizer client
+	log.Debugf("Creating synchronizer client with config: %+v", cfg.Synchronizer)
 	l1Syncr, err := synchronizer.NewSynchronizer(ctx, cfg.Synchronizer)
 	if err != nil {
 		log.Fatalf("failed to create synchronizer client, error: %v", err)
@@ -197,7 +198,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	a.resetVerifyProofTime()
 
 	go a.cleanupLockedProofs()
-	go a.sendFinalProof()
+	// go a.sendFinalProof()
 	go func() {
 		err := a.l1Syncr.Sync(false)
 		if err != nil {
