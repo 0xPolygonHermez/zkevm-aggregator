@@ -1,12 +1,14 @@
 package aggregator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"net"
+	"strings"
 	"sync"
 	"time"
 	"unicode"
@@ -268,16 +270,20 @@ func (a *Aggregator) Channel(stream prover.AggregatorService_ChannelServer) erro
 				time.Sleep(a.cfg.RetryTime.Duration)
 				continue
 			}
+			/*
+				_, err = a.tryBuildFinalProof(ctx, prover, nil)
+				if err != nil {
+					log.Errorf("Error checking proofs to verify: %v", err)
+				}
 
-			_, err = a.tryBuildFinalProof(ctx, prover, nil)
-			if err != nil {
-				log.Errorf("Error checking proofs to verify: %v", err)
-			}
+				proofGenerated, err := a.tryAggregateProofs(ctx, prover)
+				if err != nil {
+					log.Errorf("Error trying to aggregate proofs: %v", err)
+				}
+			*/
 
-			proofGenerated, err := a.tryAggregateProofs(ctx, prover)
-			if err != nil {
-				log.Errorf("Error trying to aggregate proofs: %v", err)
-			}
+			proofGenerated := false
+
 			if !proofGenerated {
 				proofGenerated, err = a.tryGenerateBatchProof(ctx, prover)
 				if err != nil {
@@ -806,17 +812,21 @@ func (a *Aggregator) getBatchFromDataStream(batchNumber uint64) ([]byte, *state.
 		return nil, nil, err
 	}
 
+	log.Infof("FromEntry %d, found", fromBatchBookMark.Value)
+
 	toEntry, err := a.streamClient.ExecCommandGetBookmark(toBatchBookMark.Encode())
 	if err != nil {
 		return nil, nil, err
 	}
+
+	log.Infof("ToEntry %d, found", fromBatchBookMark.Value)
 
 	l2BlockStart := state.DSL2BlockStart{}.Decode(fromEntry.Data)
 	batch := state.Batch{
 		BatchNumber:    batchNumber,
 		Coinbase:       l2BlockStart.Coinbase,
 		GlobalExitRoot: l2BlockStart.GlobalExitRoot,
-		LocalExitRoot:  l2BlockStart.LocalExitRoot,
+		// LocalExitRoot:  l2BlockStart.LocalExitRoot,
 	}
 
 	batchRaw := state.BatchRawV2{
@@ -824,8 +834,10 @@ func (a *Aggregator) getBatchFromDataStream(batchNumber uint64) ([]byte, *state.
 	}
 	var currentL2Block state.L2BlockRaw
 
+	entryBuffer := new(bytes.Buffer)
 	for fromEntry.Number < toEntry.Number {
-		response = append(response, fromEntry.Data...)
+		json.NewEncoder(entryBuffer).Encode(fromEntry)
+		response = append(response, entryBuffer.Bytes()...)
 		entry, err := a.streamClient.ExecCommandGetEntry(fromEntry.Number + 1)
 		if err != nil {
 			return nil, nil, err
@@ -843,10 +855,16 @@ func (a *Aggregator) getBatchFromDataStream(batchNumber uint64) ([]byte, *state.
 			batch.L1InfoTreeIndex = l2BlockStart.L1InfoTreeIndex
 		case state.EntryTypeL2Tx:
 			l2Tx := state.DSL2Transaction{}.Decode(entry.Data)
+			// New Tx raw
+			tx, err := state.DecodeTx(common.Bytes2Hex(l2Tx.Encoded))
+			if err != nil {
+				return nil, nil, err
+			}
+
 			l2TxRaw := state.L2TxRaw{
 				EfficiencyPercentage: l2Tx.EffectiveGasPricePercentage,
-				TxAlreadyEncoded:     true,
-				Data:                 l2Tx.Encoded,
+				TxAlreadyEncoded:     false,
+				Tx:                   *tx,
 			}
 			currentL2Block.Transactions = append(currentL2Block.Transactions, l2TxRaw)
 		case state.EntryTypeL2BlockEnd:
@@ -862,6 +880,8 @@ func (a *Aggregator) getBatchFromDataStream(batchNumber uint64) ([]byte, *state.
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// log.Infof("Bachl2Data read from stream: %v", common.Bytes2Hex(batchl2Data))
 
 	batch.BatchL2Data = batchl2Data
 
@@ -888,6 +908,8 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 		return nil, nil, nil, err
 	}
 	batchNumberToVerify := lastVerifiedBatchNumber + 1
+
+	log.Infof("Batch Number To Verify: %d", batchNumberToVerify)
 
 	// Get virtual batch pending to generate proof from the data stream
 	batchDataToVerify, batch, err := a.getBatchFromDataStream(batchNumberToVerify)
@@ -1091,6 +1113,8 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchDataToVerify []b
 		}
 	}
 
+	log.Infof("IndexLeaves: %+v", indexLeaves)
+
 	l1InfoTreeData := map[uint32]*prover.L1Data{}
 	forcedBlockhashL1 := common.Hash{}
 	if !isForcedBatch {
@@ -1161,16 +1185,20 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchDataToVerify []b
 	}*/
 
 	// Get Witness
+	log.Infof("Trying to get witness for batch %v from %v", batchToVerify.BatchNumber, a.cfg.WitnessURL)
 	witness, err := getWitness(batchToVerify.BatchNumber, a.cfg.WitnessURL)
 	if err != nil {
 		return nil, err
 	}
+
+	log.Info("Witness Calculated")
 
 	// Calculate accInputHash
 	a.accInputHashMutes.RLock()
 	oldAccInputHash := a.batchAccInputHash[batchToVerify.BatchNumber-1]
 	a.accInputHashMutes.RUnlock()
 
+	// TODO: Store accInputHash along the proof in order to use it in case of restart
 	if oldAccInputHash == state.ZeroHash {
 		return nil, fmt.Errorf("failed to get oldAccInputHash for batch %d", batchToVerify.BatchNumber)
 	}
@@ -1181,10 +1209,19 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchDataToVerify []b
 	}
 
 	// Store new accInputHash
-
 	a.accInputHashMutes.Lock()
 	a.batchAccInputHash[batchToVerify.BatchNumber] = accInputHash
 	a.accInputHashMutes.Unlock()
+
+	log.Infof("Calculated Acc Input Hash:%v", oldAccInputHash)
+
+	// Get batch timestamp
+	seqs, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, batchToVerify.BatchNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("Timestampt:%v", seqs.Timestamp.Unix())
 
 	inputProver := &prover.StatelessInputProver{
 		PublicInputs: &prover.StatelessPublicInputs{
@@ -1192,10 +1229,10 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchDataToVerify []b
 			DataStream:      batchDataToVerify,
 			OldAccInputHash: oldAccInputHash.Bytes(),
 			L1InfoRoot:      l1InfoRoot.Bytes(),
-			// TimestampLimit:    uint64(batchDataToVerify.Timestamp.Unix()),
-			SequencerAddr:  batchToVerify.Coinbase.String(),
-			AggregatorAddr: a.cfg.SenderAddress,
-			L1InfoTreeData: l1InfoTreeData,
+			TimestampLimit:  uint64(seqs.Timestamp.Unix()),
+			SequencerAddr:   batchToVerify.Coinbase.String(),
+			AggregatorAddr:  a.cfg.SenderAddress,
+			L1InfoTreeData:  l1InfoTreeData,
 			// TODO: Properly populate this field
 			ForcedBlockhashL1: common.Hash{}.Bytes(),
 		},
@@ -1239,7 +1276,7 @@ func calculateAccInputHash(oldAccInputHash common.Hash, batchHashData []byte, l1
 
 func getWitness(batchNumber uint64, URL string) ([]byte, error) {
 	var witness string
-	response, err := rpclient.JSONRPCCall(URL, "zkevm_getBatchWitness", nil, batchNumber)
+	response, err := rpclient.JSONRPCCall(URL, "zkevm_getBatchWitness", nil, "batch-1", batchNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -1249,11 +1286,17 @@ func getWitness(batchNumber uint64, URL string) ([]byte, error) {
 		return nil, err
 	}
 
-	return common.Hex2Bytes(witness), nil
+	witnessString := strings.TrimLeft(witness, "0x")
+	if len(witnessString)%2 != 0 {
+		witnessString = "0" + witnessString
+	}
+	bytes := common.Hex2Bytes(witnessString)
+
+	return bytes, nil
 }
 
 func printInputProver(inputProver *prover.StatelessInputProver) {
-	log.Debugf("Witness: %v", common.BytesToHash(inputProver.PublicInputs.Witness))
+	log.Debugf("Witness: %v", common.Bytes2Hex(inputProver.PublicInputs.Witness))
 	log.Debugf("DataStream: %v", common.Bytes2Hex(inputProver.PublicInputs.DataStream))
 	log.Debugf("OldAccInputHash: %v", common.BytesToHash(inputProver.PublicInputs.OldAccInputHash))
 	log.Debugf("L1InfoRoot: %v", common.BytesToHash(inputProver.PublicInputs.L1InfoRoot))

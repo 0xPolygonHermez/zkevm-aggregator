@@ -63,7 +63,7 @@
 
     "aggregatorServerPort": 50081,
     "aggregatorClientPort": 50081,
-    "aggregatorClientHost": "127.0.0.1",
+    "aggregatorClientHost": "zkevm-aggregator",
     "aggregatorClientMockTimeout": 10000000,
     "aggregatorClientWatchdogTimeout": 60000000,
 

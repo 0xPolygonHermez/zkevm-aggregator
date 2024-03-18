@@ -154,6 +154,6 @@ require (
 
 require (
 	github.com/0xPolygonHermez/zkevm-ethtx-manager v0.0.12
-	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.0.1
+	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.0.3
 	github.com/prometheus/client_golang v1.18.0
 )

@@ -5,6 +5,16 @@ networks:
     
 services:
 
+  cdk-erigon-cardona:
+    container_name: cdk-erigon-cardona
+    image: cdk-erigon
+    ports:
+      - 8545:8545
+    volumes:
+      - ./config/hermezconfig-cardona.yaml:/hermezconfig-cardona.yaml
+    command: >
+      --config="./hermezconfig-cardona.yaml" --http.addr=0.0.0.0 --http.vhosts=* --http.corsdomain=*
+
   zkevm-aggregator:
     container_name: zkevm-aggregator
     image: zkevm-aggregator
@@ -65,15 +75,13 @@ services:
 
   zkevm-prover:
     container_name: zkevm-prover
-    platform: linux/amd64
-    image: hermeznetwork/zkevm-prover:v5.0.1
+    image: hermeznetwork/zkevm-prover:v5.0.7
     ports:
       - 50061:50061 # MT
       - 50071:50071 # Executor
-    environment:
-      - EXPERIMENTAL_DOCKER_DESKTOP_FORCE_QEMU=1
     volumes:
       - ./config/test.prover.config.json:/usr/src/app/config.json
+      - /home/zkevm/zkevm/config/v5.0.0-rc.4-fork.8/config:/app/config
     command: >
       zkProver -c /usr/src/app/config.json
 

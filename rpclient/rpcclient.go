@@ -40,7 +40,7 @@ func NewRPCClient(url string) *RPCClient {
 // JSONRPCCall executes a 2.0 JSON RPC HTTP Post Request to the provided URL with
 // the provided method and parameters, which is compatible with the Ethereum
 // JSON RPC Server.
-func JSONRPCCall(url, method string, httpHeaders map[string]string, parameters ...interface{}) (Response, error) {
+func JSONRPCCall(url, method string, httpHeaders map[string]string, id interface{}, parameters ...interface{}) (Response, error) {
 	params, err := json.Marshal(parameters)
 	if err != nil {
 		return Response{}, err
@@ -48,7 +48,7 @@ func JSONRPCCall(url, method string, httpHeaders map[string]string, parameters .
 
 	request := Request{
 		JSONRPC: jsonRPCVersion,
-		ID:      float64(1),
+		ID:      id,
 		Method:  method,
 		Params:  params,
 	}
@@ -73,59 +73,6 @@ func JSONRPCCall(url, method string, httpHeaders map[string]string, parameters .
 	if err != nil {
 		return Response{}, err
 	}
-	return res, nil
-}
-
-// BatchCall used in batch requests to send multiple methods and parameters at once
-type BatchCall struct {
-	Method     string
-	Parameters []interface{}
-}
-
-// JSONRPCBatchCall executes a 2.0 JSON RPC HTTP Post Batch Request to the provided URL with
-// the provided method and parameters groups, which is compatible with the Ethereum
-// JSON RPC Server.
-func JSONRPCBatchCall(url string, httpHeaders map[string]string, calls ...BatchCall) ([]Response, error) {
-	requests := []Request{}
-
-	for i, call := range calls {
-		params, err := json.Marshal(call.Parameters)
-		if err != nil {
-			return nil, err
-		}
-
-		req := Request{
-			JSONRPC: jsonRPCVersion,
-			ID:      float64(i),
-			Method:  call.Method,
-			Params:  params,
-		}
-
-		requests = append(requests, req)
-	}
-
-	httpRes, err := sendJSONRPC_HTTPRequest(url, requests, httpHeaders)
-	if err != nil {
-		return nil, err
-	}
-
-	resBody, err := io.ReadAll(httpRes.Body)
-	if err != nil {
-		return nil, err
-	}
-	defer httpRes.Body.Close()
-
-	if httpRes.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%v - %v", httpRes.StatusCode, string(resBody))
-	}
-
-	var res []Response
-	err = json.Unmarshal(resBody, &res)
-	if err != nil {
-		errorMessage := string(resBody)
-		return nil, fmt.Errorf(errorMessage)
-	}
-
 	return res, nil
 }
 

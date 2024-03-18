@@ -52,7 +52,7 @@ stop-zkprover: ## Stops zkprover
 
 .PHONY: run
 run: ## Runs a full node
-	$(RUNL1NETWORK)
+	# $(RUNL1NETWORK)
 	$(RUNAGGDB)
 	$(RUNL1SYNCDB)
 	$(RUNZKPROVER)
