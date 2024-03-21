@@ -3,7 +3,7 @@ module github.com/0xPolygonHermez/zkevm-aggregator
 go 1.21.3
 
 require (
-	github.com/0xPolygonHermez/zkevm-data-streamer v0.2.0
+	github.com/0xPolygonHermez/zkevm-data-streamer v0.2.1
 	github.com/dop251/goja v0.0.0-20230806174421-c933cf95e127
 	github.com/ethereum/go-ethereum v1.13.14
 	github.com/gobuffalo/packr/v2 v2.8.3
@@ -154,6 +154,6 @@ require (
 
 require (
 	github.com/0xPolygonHermez/zkevm-ethtx-manager v0.0.12
-	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.0.3
+	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.2.3
 	github.com/prometheus/client_golang v1.18.0
 )

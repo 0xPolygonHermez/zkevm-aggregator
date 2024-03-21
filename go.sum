@@ -37,12 +37,12 @@ cloud.google.com/go/storage v1.6.0/go.mod h1:N7U0C8pVQ/+NIKOBQyamJIeKQKkZ+mxpohl
 cloud.google.com/go/storage v1.8.0/go.mod h1:Wv1Oy7z6Yz3DshWRJFhqM/UCfaWIRTdp0RXyy7KQOVs=
 cloud.google.com/go/storage v1.10.0/go.mod h1:FLPqc6j+Ki4BU591ie1oL6qBQGu2Bl/tZ9ullr3+Kg0=
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
-github.com/0xPolygonHermez/zkevm-data-streamer v0.2.0 h1:W4s0ICVQ2477quI0trjvPTae3kNgkPXINyG4NOBR6VQ=
-github.com/0xPolygonHermez/zkevm-data-streamer v0.2.0/go.mod h1:0QkAXcFa92mFJrCbN3UPUJGJYes851yEgYHLONnaosE=
+github.com/0xPolygonHermez/zkevm-data-streamer v0.2.1 h1:s1RK6rie/FV1FJqYAmaZ15MEndtrJo9RTw6z7ps5lMY=
+github.com/0xPolygonHermez/zkevm-data-streamer v0.2.1/go.mod h1:0QkAXcFa92mFJrCbN3UPUJGJYes851yEgYHLONnaosE=
 github.com/0xPolygonHermez/zkevm-ethtx-manager v0.0.12 h1:Fv/KT0KnkfSwV2G8xT1MFcrAU+XO/xOicoy7v2fhiNM=
 github.com/0xPolygonHermez/zkevm-ethtx-manager v0.0.12/go.mod h1:GPVMEzh23o987FfK6WSEw9VsvmJtu7t1Thv7+cpNBTY=
-github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.0.3 h1:ABu1P5lOOstst6NeDgaG0taTtmfyWJymqRoYJ4N33kk=
-github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.0.3/go.mod h1:PpctrdlWqQ2DL70cNhEsYjrzOoZLke2bmsbj3RdjZBU=
+github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.2.3 h1:MLFkcXwRCSvhZCBUXEi986LkeiUeSOchJ6wGIZKb86M=
+github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.2.3/go.mod h1:h2M7NR3LYLHjsaJB/uQBwoFjc4p6KbfPiDy4AHvnQvY=
 github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9/go.mod h1:bOvUY6CB00SOBii9/FifXqc0awNKxLFCL/+pkDPuyl8=
 github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 h1:w+iIsaOQNcT7OZ575w+acHgRric5iCyQh+xv+KJ4HB8=
 github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78/go.mod h1:LmzpDX56iTiv29bbRTIsUNlaFfuhWRQBWjQdVyAevI8=
