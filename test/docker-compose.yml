@@ -75,7 +75,7 @@ services:
 
   zkevm-prover:
     container_name: zkevm-prover
-    image: hermeznetwork/zkevm-prover:v5.0.9-RC2
+    image: hermeznetwork/zkevm-prover:v5.0.9-RC3
     restart: unless-stopped 
     ports:
       - 50061:50061 # MT
