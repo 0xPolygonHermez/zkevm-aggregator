@@ -13,8 +13,8 @@ import (
 // CheckProofContainsCompleteSequences checks if a recursive proof contains complete sequences
 func (p *PostgresStorage) CheckProofContainsCompleteSequences(ctx context.Context, proof *state.Proof, dbTx pgx.Tx) (bool, error) {
 	const getProofContainsCompleteSequencesSQL = `
-		SELECT EXISTS (SELECT 1 FROM state.proof s1 WHERE s1.seq_from_batch_num = $1) AND
-			   EXISTS (SELECT 1 FROM state.proof s2 WHERE s2.seq_to_batch_num = $2)
+		SELECT EXISTS (SELECT 1 FROM aggregator.proof s1 WHERE s1.seq_from_batch_num = $1) AND
+			   EXISTS (SELECT 1 FROM aggregator.proof s2 WHERE s2.seq_to_batch_num = $2)
 		`
 	e := p.getExecQuerier(dbTx)
 	var exists bool
@@ -41,8 +41,8 @@ func (p *PostgresStorage) GetProofReadyToVerify(ctx context.Context, lastVerfied
 			p.updated_at
 		FROM aggregator.proof p
 		WHERE batch_num = $1 AND generating_since IS NULL AND
-			EXISTS (SELECT 1 FROM state.proof s1 WHERE s1.seq_from_batch_num = p.batch_num) AND
-			EXISTS (SELECT 1 FROM state.proof s2 WHERE s2.seq_to_batch_num = p.batch_num_final)		
+			EXISTS (SELECT 1 FROM aggregator.proof s1 WHERE s1.seq_from_batch_num = p.batch_num) AND
+			EXISTS (SELECT 1 FROM aggregator.proof s2 WHERE s2.seq_to_batch_num = p.batch_num_final)		
 		`
 
 	var proof *state.Proof = &state.Proof{}
