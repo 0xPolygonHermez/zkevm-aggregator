@@ -321,8 +321,8 @@ func (a *Aggregator) sendFinalProof() {
 
 			a.startProofVerification()
 
-			// finalBatch, err := a.state.GetBatchByNumber(ctx, proof.BatchNumberFinal, nil)
-			_, finalBatch, err := a.getBatchFromDataStream(proof.BatchNumberFinal)
+			// TODO: Review time.Now()
+			_, finalBatch, err := a.getBatchFromDataStream(proof.BatchNumberFinal, time.Now())
 			if err != nil {
 				log.Errorf("Failed to retrieve batch with number [%d]: %v", proof.BatchNumberFinal, err)
 				a.endProofVerification()
@@ -405,7 +405,9 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, prover proverInterface
 	if string(finalProof.Public.NewStateRoot) == mockedStateRoot && string(finalProof.Public.NewLocalExitRoot) == mockedLocalExitRoot {
 		// This local exit root and state root come from the mock
 		// prover, use the one captured by the executor instead
-		_, finalBatch, err := a.getBatchFromDataStream(proof.BatchNumberFinal)
+
+		// TODO: Review time.Now() does not break anything
+		_, finalBatch, err := a.getBatchFromDataStream(proof.BatchNumberFinal, time.Now())
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
 		}
