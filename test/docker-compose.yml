@@ -13,7 +13,7 @@ services:
     volumes:
       - ./config/hermezconfig-cardona.yaml:/hermezconfig-cardona.yaml
     command: >
-      --config="./hermezconfig-cardona.yaml" --http.addr=0.0.0.0 --http.vhosts=* --http.corsdomain=*
+      --config="/hermezconfig-cardona.yaml" --http.addr=0.0.0.0 --http.vhosts=* --http.corsdomain=*
 
   zkevm-aggregator:
     container_name: zkevm-aggregator
@@ -75,7 +75,8 @@ services:
 
   zkevm-prover:
     container_name: zkevm-prover
-    image: hermeznetwork/zkevm-prover:v5.0.7
+    image: hermeznetwork/zkevm-prover:v5.0.9-RC2
+    restart: unless-stopped 
     ports:
       - 50061:50061 # MT
       - 50071:50071 # Executor

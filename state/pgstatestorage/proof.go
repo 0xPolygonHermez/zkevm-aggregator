@@ -13,8 +13,8 @@ import (
 // CheckProofContainsCompleteSequences checks if a recursive proof contains complete sequences
 func (p *PostgresStorage) CheckProofContainsCompleteSequences(ctx context.Context, proof *state.Proof, dbTx pgx.Tx) (bool, error) {
 	const getProofContainsCompleteSequencesSQL = `
-		SELECT EXISTS (SELECT 1 FROM state.sequences s1 WHERE s1.from_batch_num = $1) AND
-			   EXISTS (SELECT 1 FROM state.sequences s2 WHERE s2.to_batch_num = $2)
+		SELECT EXISTS (SELECT 1 FROM state.proof s1 WHERE s1.seq_from_batch_num = $1) AND
+			   EXISTS (SELECT 1 FROM state.proof s2 WHERE s2.seq_to_batch_num = $2)
 		`
 	e := p.getExecQuerier(dbTx)
 	var exists bool
@@ -41,8 +41,8 @@ func (p *PostgresStorage) GetProofReadyToVerify(ctx context.Context, lastVerfied
 			p.updated_at
 		FROM aggregator.proof p
 		WHERE batch_num = $1 AND generating_since IS NULL AND
-			EXISTS (SELECT 1 FROM state.sequences s1 WHERE s1.from_batch_num = p.batch_num) AND
-			EXISTS (SELECT 1 FROM state.sequences s2 WHERE s2.to_batch_num = p.batch_num_final)		
+			EXISTS (SELECT 1 FROM state.proof s1 WHERE s1.seq_from_batch_num = p.batch_num) AND
+			EXISTS (SELECT 1 FROM state.proof s2 WHERE s2.seq_to_batch_num = p.batch_num_final)		
 		`
 
 	var proof *state.Proof = &state.Proof{}
@@ -80,6 +80,8 @@ func (p *PostgresStorage) GetProofsToAggregate(ctx context.Context, dbTx pgx.Tx)
 			p1.generating_since as p1_generating_since,
 			p1.created_at as p1_created_at,
 			p1.updated_at as p1_updated_at,
+			p1.seq_from_batch_num as p1_seq_from_batch_num,
+			p1.seq_to_batch_num as p1_seq_to_batch_num,
 			p2.batch_num as p2_batch_num, 
 			p2.batch_num_final as p2_batch_num_final, 
 			p2.proof as p2_proof,	
@@ -89,24 +91,26 @@ func (p *PostgresStorage) GetProofsToAggregate(ctx context.Context, dbTx pgx.Tx)
 			p2.prover_id as p2_prover_id,
 			p2.generating_since as p2_generating_since,
 			p2.created_at as p2_created_at,
-			p2.updated_at as p2_updated_at
+			p2.updated_at as p2_updated_at,
+			p2.seq_from_batch_num as p2_seq_from_batch_num,
+			p2.seq_to_batch_num as p2_seq_to_batch_num
 		FROM aggregator.proof p1 INNER JOIN aggregator.proof p2 ON p1.batch_num_final = p2.batch_num - 1
 		WHERE p1.generating_since IS NULL AND p2.generating_since IS NULL AND 
 		 	  p1.proof IS NOT NULL AND p2.proof IS NOT NULL AND
 			  (
 					EXISTS (
-					SELECT 1 FROM state.sequences s
-					WHERE p1.batch_num >= s.from_batch_num AND p1.batch_num <= s.to_batch_num AND
-						p1.batch_num_final >= s.from_batch_num AND p1.batch_num_final <= s.to_batch_num AND
-						p2.batch_num >= s.from_batch_num AND p2.batch_num <= s.to_batch_num AND
-						p2.batch_num_final >= s.from_batch_num AND p2.batch_num_final <= s.to_batch_num
+					SELECT 1 FROM aggregator.proof p3
+					WHERE p1.batch_num >= p3.seq_from_batch_num AND p1.batch_num <= p3.seq_to_batch_num AND
+						p1.batch_num_final >= p3.seq_from_batch_num AND p1.batch_num_final <= p3.seq_to_batch_num AND
+						p2.batch_num >= p3.seq_from_batch_num AND p2.batch_num <= p3.seq_to_batch_num AND
+						p2.batch_num_final >= p3.seq_from_batch_num AND p2.batch_num_final <= p3.seq_to_batch_num
 					)
 					OR
 					(
-						EXISTS ( SELECT 1 FROM state.sequences s WHERE p1.batch_num = s.from_batch_num) AND
-						EXISTS ( SELECT 1 FROM state.sequences s WHERE p1.batch_num_final = s.to_batch_num) AND
-						EXISTS ( SELECT 1 FROM state.sequences s WHERE p2.batch_num = s.from_batch_num) AND
-						EXISTS ( SELECT 1 FROM state.sequences s WHERE p2.batch_num_final = s.to_batch_num)
+						EXISTS ( SELECT 1 FROM aggregator.proof p3 WHERE p1.batch_num = p3.seq_from_batch_num) AND
+						EXISTS ( SELECT 1 FROM aggregator.proof p3 WHERE p1.batch_num_final = p3.seq_to_batch_num) AND
+						EXISTS ( SELECT 1 FROM aggregator.proof p3 WHERE p2.batch_num = p3.seq_from_batch_num) AND
+						EXISTS ( SELECT 1 FROM aggregator.proof p3 WHERE p2.batch_num_final = p3.seq_to_batch_num)
 					)
 				)
 		ORDER BY p1.batch_num ASC
@@ -116,8 +120,8 @@ func (p *PostgresStorage) GetProofsToAggregate(ctx context.Context, dbTx pgx.Tx)
 	e := p.getExecQuerier(dbTx)
 	row := e.QueryRow(ctx, getProofsToAggregateSQL)
 	err := row.Scan(
-		&proof1.BatchNumber, &proof1.BatchNumberFinal, &proof1.Proof, &proof1.ProofID, &proof1.InputProver, &proof1.Prover, &proof1.ProverID, &proof1.GeneratingSince, &proof1.CreatedAt, &proof1.UpdatedAt,
-		&proof2.BatchNumber, &proof2.BatchNumberFinal, &proof2.Proof, &proof2.ProofID, &proof2.InputProver, &proof2.Prover, &proof2.ProverID, &proof2.GeneratingSince, &proof2.CreatedAt, &proof2.UpdatedAt)
+		&proof1.BatchNumber, &proof1.BatchNumberFinal, &proof1.Proof, &proof1.ProofID, &proof1.InputProver, &proof1.Prover, &proof1.ProverID, &proof1.GeneratingSince, &proof1.CreatedAt, &proof1.UpdatedAt, &proof1.SequenceFromBatchNumber, &proof1.SequenceToBatchNumber,
+		&proof2.BatchNumber, &proof2.BatchNumberFinal, &proof2.Proof, &proof2.ProofID, &proof2.InputProver, &proof2.Prover, &proof2.ProverID, &proof2.GeneratingSince, &proof2.CreatedAt, &proof2.UpdatedAt, &proof2.SequenceFromBatchNumber, &proof2.SequenceToBatchNumber)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, state.ErrNotFound
@@ -130,10 +134,10 @@ func (p *PostgresStorage) GetProofsToAggregate(ctx context.Context, dbTx pgx.Tx)
 
 // AddGeneratedProof adds a generated proof to the storage
 func (p *PostgresStorage) AddGeneratedProof(ctx context.Context, proof *state.Proof, dbTx pgx.Tx) error {
-	const addGeneratedProofSQL = "INSERT INTO aggregator.proof (batch_num, batch_num_final, proof, proof_id, input_prover, prover, prover_id, generating_since, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
+	const addGeneratedProofSQL = "INSERT INTO aggregator.proof (batch_num, batch_num_final, proof, proof_id, input_prover, prover, prover_id, generating_since, created_at, updated_at, seq_from_batch_num, seq_to_batch_num) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"
 	e := p.getExecQuerier(dbTx)
 	now := time.Now().UTC().Round(time.Microsecond)
-	_, err := e.Exec(ctx, addGeneratedProofSQL, proof.BatchNumber, proof.BatchNumberFinal, proof.Proof, proof.ProofID, proof.InputProver, proof.Prover, proof.ProverID, proof.GeneratingSince, now, now)
+	_, err := e.Exec(ctx, addGeneratedProofSQL, proof.BatchNumber, proof.BatchNumberFinal, proof.Proof, proof.ProofID, proof.InputProver, proof.Prover, proof.ProverID, proof.GeneratingSince, now, now, proof.SequenceFromBatchNumber, proof.SequenceToBatchNumber)
 	return err
 }
 

@@ -1,7 +1,6 @@
 package aggregator
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -99,15 +98,16 @@ func New(ctx context.Context, cfg Config, stateInterface stateInterface, etherma
 		log.Fatalf("error creating ethtxmanager client: %v", err)
 	}
 
-	// Create datastream client
-	streamClient, err := datastreamer.NewClientWithLogsConfig(cfg.StreamClient.Server, dataStreamType, streamlog.Config{Environment: streamlog.LogEnvironment(cfg.Log.Environment), Level: "error", Outputs: cfg.Log.Outputs})
-	if err != nil {
-		log.Fatalf("failed to create stream client, error: %v", err)
+	// Create datastream client (set to error level as it is super verbose by default)
+	streamLogConfig := streamlog.Config{
+		Environment: streamlog.LogEnvironment(cfg.Log.Environment),
+		Level:       "error",
+		Outputs:     cfg.Log.Outputs,
 	}
 
-	err = streamClient.Start()
+	streamClient, err := datastreamer.NewClientWithLogsConfig(cfg.StreamClient.Server, dataStreamType, streamLogConfig)
 	if err != nil {
-		log.Fatalf("failed to start stream client, error: %v", err)
+		log.Fatalf("failed to create stream client, error: %v", err)
 	}
 
 	// Create L1 synchronizer client
@@ -172,20 +172,30 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	healthService := newHealthChecker()
 	grpchealth.RegisterHealthServer(a.srv, healthService)
 
+	// Initial sync blocking
+	err = a.l1Syncr.Sync(true)
+	if err != nil {
+		return err
+	}
+
 	// Initiate AccInputHash map
 	lastVerifiedBatchNumber, err := a.etherman.GetLatestVerifiedBatchNum()
 	if err != nil {
 		return err
 	}
 
-	a.getAccInputHash(ctx, lastVerifiedBatchNumber)
-
-	// Initial synch
-	err = a.l1Syncr.Sync(true)
+	err = a.getAndStoreAccInputHash(ctx, lastVerifiedBatchNumber)
 	if err != nil {
 		return err
 	}
 
+	// Start stream client
+	err = a.streamClient.Start()
+	if err != nil {
+		log.Fatalf("failed to start stream client, error: %v", err)
+	}
+
+	// A this point everyhing is ready so start serving
 	go func() {
 		log.Infof("Server listening on port %d", a.cfg.Port)
 		if err := a.srv.Serve(lis); err != nil {
@@ -267,19 +277,16 @@ func (a *Aggregator) Channel(stream prover.AggregatorService_ChannelServer) erro
 				time.Sleep(a.cfg.RetryTime.Duration)
 				continue
 			}
-			/*
-				_, err = a.tryBuildFinalProof(ctx, prover, nil)
-				if err != nil {
-					log.Errorf("Error checking proofs to verify: %v", err)
-				}
 
-				proofGenerated, err := a.tryAggregateProofs(ctx, prover)
-				if err != nil {
-					log.Errorf("Error trying to aggregate proofs: %v", err)
-				}
-			*/
+			_, err = a.tryBuildFinalProof(ctx, prover, nil)
+			if err != nil {
+				log.Errorf("Error checking proofs to verify: %v", err)
+			}
 
-			proofGenerated := false
+			proofGenerated, err := a.tryAggregateProofs(ctx, prover)
+			if err != nil {
+				log.Errorf("Error trying to aggregate proofs: %v", err)
+			}
 
 			if !proofGenerated {
 				proofGenerated, err = a.tryGenerateBatchProof(ctx, prover)
@@ -323,9 +330,9 @@ func (a *Aggregator) sendFinalProof() {
 			}
 
 			inputs := ethmanTypes.FinalProofInputs{
-				FinalProof:       msg.finalProof,
-				NewLocalExitRoot: finalBatch.LocalExitRoot.Bytes(),
-				NewStateRoot:     finalBatch.StateRoot.Bytes(),
+				FinalProof: msg.finalProof,
+				// NewLocalExitRoot: finalBatch.LocalExitRoot.Bytes(),
+				NewStateRoot: finalBatch.StateRoot.Bytes(),
 			}
 
 			log.Infof("Final proof inputs: NewLocalExitRoot [%#x], NewStateRoot [%#x]", inputs.NewLocalExitRoot, inputs.NewStateRoot)
@@ -433,7 +440,6 @@ func (a *Aggregator) tryBuildFinalProof(ctx context.Context, prover proverInterf
 	}
 	log.Debug("Send final proof time reached")
 
-	// TODO: Wait n blocks to be sure that the batch is included in the L1
 	lastVerifiedBatchNumber, err := a.etherman.GetLatestVerifiedBatchNum()
 	if err != nil {
 		return false, err
@@ -832,10 +838,8 @@ func (a *Aggregator) getBatchFromDataStream(batchNumber uint64) ([]byte, *state.
 	}
 	var currentL2Block state.L2BlockRaw
 
-	entryBuffer := new(bytes.Buffer)
 	for fromEntry.Number < toEntry.Number {
-		json.NewEncoder(entryBuffer).Encode(fromEntry)
-		response = append(response, entryBuffer.Bytes()...)
+		response = append(response, fromEntry.Encode()...)
 		entry, err := a.streamClient.ExecCommandGetEntry(fromEntry.Number + 1)
 		if err != nil {
 			return nil, nil, err
@@ -885,13 +889,13 @@ func (a *Aggregator) getBatchFromDataStream(batchNumber uint64) ([]byte, *state.
 	return response, &batch, nil
 }
 
-func (a *Aggregator) getAccInputHash(ctx context.Context, batchNumber uint64) error {
+func (a *Aggregator) getAndStoreAccInputHash(ctx context.Context, batchNumber uint64) error {
 	accInputHash, err := a.etherman.GetBatchAccInputHash(ctx, batchNumber)
 	if err != nil {
 		return err
 	}
 
-	log.Infof("AccInputHash for Batch %v: %v", batchNumber, accInputHash.String())
+	log.Debugf("AccInputHash for batch %v: %v", batchNumber, accInputHash.String())
 
 	a.accInputHashMutes.Lock()
 	a.batchAccInputHash[batchNumber] = accInputHash
@@ -921,11 +925,24 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 	}
 
 	// Update Acc Input Hash map
-	a.getAccInputHash(ctx, lastVerifiedBatchNumber)
+	err = a.getAndStoreAccInputHash(ctx, lastVerifiedBatchNumber)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	batchNumberToVerify := lastVerifiedBatchNumber + 1
+	log.Debugf("Batch Number To Verify: %d", batchNumberToVerify)
 
-	log.Infof("Batch Number To Verify: %d", batchNumberToVerify)
+	// Check if the batch exists
+	sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, batchNumberToVerify)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Not found, so it it not possible to verify the batch yet
+	if sequence == nil {
+		return nil, nil, nil, state.ErrNotFound
+	}
 
 	// Get virtual batch pending to generate proof from the data stream
 	batchDataToVerify, batch, err := a.getBatchFromDataStream(batchNumberToVerify)
@@ -952,11 +969,13 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 
 	now := time.Now().Round(time.Microsecond)
 	proof := &state.Proof{
-		BatchNumber:      batch.BatchNumber,
-		BatchNumberFinal: batch.BatchNumber,
-		Prover:           &proverName,
-		ProverID:         &proverID,
-		GeneratingSince:  &now,
+		BatchNumber:             batch.BatchNumber,
+		BatchNumberFinal:        batch.BatchNumber,
+		SequenceFromBatchNumber: sequence.FromBatchNumber,
+		SequenceToBatchNumber:   sequence.ToBatchNumber,
+		Prover:                  &proverName,
+		ProverID:                &proverID,
+		GeneratingSince:         &now,
 	}
 
 	// Avoid other prover to process the same batch
@@ -1105,15 +1124,15 @@ func (a *Aggregator) resetVerifyProofTime() {
 }
 
 func (a *Aggregator) buildInputProver(ctx context.Context, batchDataToVerify []byte, batchToVerify *state.Batch) (*prover.StatelessInputProver, error) {
-	seqs, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, batchToVerify.BatchNumber)
+	sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, batchToVerify.BatchNumber)
 	if err != nil {
 		return nil, err
 	}
 
-	if seqs == nil {
+	if sequence == nil {
 		return nil, fmt.Errorf("sequence not found for batch number %v", batchToVerify.BatchNumber)
 	}
-	l1InfoRoot := seqs.L1InfoRoot
+	l1InfoRoot := sequence.L1InfoRoot
 
 	isForcedBatch := false
 	batchRawData := &state.BatchRawV2{}
@@ -1225,26 +1244,12 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchDataToVerify []b
 		return nil, err
 	}
 
-	log.Info("Acc input hash calculated")
+	log.Infof("Calculated Acc Input Hash: %v", oldAccInputHash)
 
 	// Store new accInputHash
 	a.accInputHashMutes.Lock()
 	a.batchAccInputHash[batchToVerify.BatchNumber] = accInputHash
 	a.accInputHashMutes.Unlock()
-
-	log.Infof("Calculated Acc Input Hash:%v", oldAccInputHash)
-
-	// Get batch timestamp
-	for seqs == nil {
-		log.Info("Seq is nill. Waiting...")
-		time.Sleep(5 * time.Second)
-		seqs, err = a.l1Syncr.GetSequenceByBatchNumber(ctx, batchToVerify.BatchNumber)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	log.Info("Timestamp Retrieved")
 
 	inputProver := &prover.StatelessInputProver{
 		PublicInputs: &prover.StatelessPublicInputs{
@@ -1252,7 +1257,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchDataToVerify []b
 			DataStream:        batchDataToVerify,
 			OldAccInputHash:   oldAccInputHash.Bytes(),
 			L1InfoRoot:        l1InfoRoot.Bytes(),
-			TimestampLimit:    uint64(seqs.Timestamp.Unix()),
+			TimestampLimit:    uint64(sequence.Timestamp.Unix()),
 			SequencerAddr:     batchToVerify.Coinbase.String(),
 			AggregatorAddr:    a.cfg.SenderAddress,
 			L1InfoTreeData:    l1InfoTreeData,
@@ -1328,6 +1333,7 @@ func getWitness(batchNumber uint64, URL string) ([]byte, error) {
 func printInputProver(inputProver *prover.StatelessInputProver) {
 	log.Debugf("Witness length: %v", len(inputProver.PublicInputs.Witness))
 	log.Debugf("DataStream length: %v", len(inputProver.PublicInputs.DataStream))
+	// log.Debugf("Full DataStream: %v", common.Bytes2Hex(inputProver.PublicInputs.DataStream))
 	log.Debugf("OldAccInputHash: %v", common.BytesToHash(inputProver.PublicInputs.OldAccInputHash))
 	log.Debugf("L1InfoRoot: %v", common.BytesToHash(inputProver.PublicInputs.L1InfoRoot))
 	log.Debugf("TimestampLimit: %v", inputProver.PublicInputs.TimestampLimit)
