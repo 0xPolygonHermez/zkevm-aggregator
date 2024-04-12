@@ -31,6 +31,7 @@ type Batch struct {
 	LocalExitRoot   common.Hash
 	AccInputHash    common.Hash
 	L1InfoTreeIndex uint32
+	L1InfoRoot      common.Hash
 	// Timestamp (<=incaberry) -> batch time
 	// 			 (>incaberry) -> minTimestamp used in batch creation, real timestamp is in virtual_batch.batch_timestamp
 	Timestamp      time.Time

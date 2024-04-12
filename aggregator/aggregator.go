@@ -63,6 +63,12 @@ type Aggregator struct {
 	stateDBMutex            *sync.Mutex
 	timeSendFinalProofMutex *sync.RWMutex
 
+	// Data stream handling variables
+	currentBatchStreamData []byte
+	currentStreamBatch     state.Batch
+	currentStreamBatchRaw  state.BatchRawV2
+	currentStreamL2Block   state.L2BlockRaw
+
 	finalProof     chan finalProofMsg
 	verifyingProof bool
 
@@ -93,10 +99,10 @@ func New(ctx context.Context, cfg Config, stateInterface stateInterface, etherma
 		log.Fatalf("error creating ethtxmanager client: %v", err)
 	}
 
-	// Create datastream client (set to error level as it is super verbose by default)
+	// Data stream client logs
 	streamLogConfig := streamlog.Config{
 		Environment: streamlog.LogEnvironment(cfg.Log.Environment),
-		Level:       "error",
+		Level:       cfg.Log.Level,
 		Outputs:     cfg.Log.Outputs,
 	}
 
@@ -126,9 +132,165 @@ func New(ctx context.Context, cfg Config, stateInterface stateInterface, etherma
 		timeSendFinalProofMutex: &sync.RWMutex{},
 		timeCleanupLockedProofs: cfg.CleanupLockedProofsInterval,
 		finalProof:              make(chan finalProofMsg),
+		currentBatchStreamData:  []byte{},
 	}
 
+	// Set function to handle the batches from the data stream
+	a.streamClient.SetProcessEntryFunc(a.handleReceivedDataStream)
+
 	return a, nil
+}
+
+func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, client *datastreamer.StreamClient, server *datastreamer.StreamServer) error {
+	ctx := context.Background()
+	forcedBlockhashL1 := common.Hash{}
+
+	a.currentBatchStreamData = append(a.currentBatchStreamData, entry.Encode()...)
+
+	switch entry.Type {
+	case state.EntryTypeL2BlockStart:
+		l2BlockStart := state.DSL2BlockStart{}.Decode(entry.Data)
+
+		if l2BlockStart.BatchNumber > a.currentStreamBatch.BatchNumber {
+			// Save Current Batch
+			if a.currentStreamBatch.BatchNumber != 0 {
+				// Get LER
+				l2BlockNumber := a.currentStreamBatchRaw.Blocks[0].BlockNumber
+				if l2BlockNumber > 0 {
+					ler, err := getLER(l2BlockNumber-1, a.cfg.WitnessURL, a.cfg.LERContract)
+					if err != nil {
+						log.Error("Error getting LER: %v", err)
+						return err
+					}
+					a.currentStreamBatch.LocalExitRoot = ler
+				}
+
+				batchl2Data, err := state.EncodeBatchV2(&a.currentStreamBatchRaw)
+				if err != nil {
+					log.Error("Error encoding batch: %v", err)
+					return err
+				}
+				a.currentStreamBatch.BatchL2Data = batchl2Data
+
+				// Ger L1InfoRoot
+				sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+				if err != nil {
+					log.Error("Error getting sequence: %v", err)
+					return err
+				}
+
+				a.currentStreamBatch.L1InfoRoot = sequence.L1InfoRoot
+				a.currentStreamBatch.Timestamp = sequence.Timestamp
+
+				// Calculate Acc Input Hash
+				oldBatch, _, err := a.state.GetBatch(ctx, a.currentStreamBatch.BatchNumber-1, nil)
+				if err != nil {
+					log.Errorf("Error getting batch %d: %v", a.currentStreamBatch.BatchNumber-1, err)
+					return err
+				}
+
+				accInputHash, err := calculateAccInputHash(oldBatch.AccInputHash, batchl2Data, a.currentStreamBatch.L1InfoRoot, uint64(a.currentStreamBatch.Timestamp.Unix()), a.currentStreamBatch.Coinbase, forcedBlockhashL1)
+				if err != nil {
+					log.Error("Error calculating acc input hash: %v", err)
+					return err
+				}
+
+				a.currentStreamBatch.AccInputHash = accInputHash
+
+				// Remove last entry
+				a.currentBatchStreamData = a.currentBatchStreamData[:len(a.currentBatchStreamData)-len(entry.Encode())]
+
+				err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentBatchStreamData, nil)
+				if err != nil {
+					log.Error("Error adding batch: %v", err)
+					return err
+				}
+			}
+
+			// Init new Batch
+			/*
+				sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, l2BlockStart.BatchNumber)
+				if err != nil {
+					log.Error("Error getting sequence: %v", err)
+					return err
+				}
+			*/
+
+			/*
+				if sequence == nil {
+					a.currentBatchStreamData = []byte{}
+					// log.Infof("l2blockstart entry: %v", entry.Number)
+					// log.Infof("Sequence for batch %d is nil", l2BlockStart.BatchNumber)
+
+					time.Sleep(5 * time.Second)
+
+					bookMark := state.DSBookMark{
+						Type:  state.BookMarkTypeBatch,
+						Value: l2BlockStart.BatchNumber - 1,
+					}
+					err = a.streamClient.ExecCommandStop()
+					if err != nil {
+						log.Error(err)
+						return err
+					}
+
+					err = a.streamClient.ExecCommandStartBookmark(bookMark.Encode())
+					if err != nil {
+						log.Error(err)
+					}
+					return err
+				}
+			*/
+			a.currentBatchStreamData = []byte{}
+			a.currentBatchStreamData = append(a.currentBatchStreamData, entry.Encode()...)
+			a.currentStreamBatch = state.Batch{
+				L1InfoTreeIndex: l2BlockStart.L1InfoTreeIndex,
+				// L1InfoRoot:      sequence.L1InfoRoot,
+				BatchNumber:    l2BlockStart.BatchNumber,
+				Coinbase:       l2BlockStart.Coinbase,
+				GlobalExitRoot: l2BlockStart.GlobalExitRoot,
+				// Timestamp:      sequence.Timestamp,
+			}
+
+			a.currentStreamBatchRaw = state.BatchRawV2{
+				Blocks: make([]state.L2BlockRaw, 0),
+			}
+
+			a.currentStreamL2Block = state.L2BlockRaw{}
+		}
+
+		header := state.ChangeL2BlockHeader{
+			DeltaTimestamp:  l2BlockStart.DeltaTimestamp,
+			IndexL1InfoTree: l2BlockStart.L1InfoTreeIndex,
+		}
+
+		a.currentStreamL2Block.ChangeL2BlockHeader = header
+		a.currentStreamL2Block.Transactions = make([]state.L2TxRaw, 0)
+		a.currentStreamL2Block.BlockNumber = l2BlockStart.L2BlockNumber
+		a.currentStreamBatch.L1InfoTreeIndex = l2BlockStart.L1InfoTreeIndex
+		a.currentStreamBatch.GlobalExitRoot = l2BlockStart.GlobalExitRoot
+	case state.EntryTypeL2Tx:
+		l2Tx := state.DSL2Transaction{}.Decode(entry.Data)
+		// New Tx raw
+		tx, err := state.DecodeTx(common.Bytes2Hex(l2Tx.Encoded))
+		if err != nil {
+			log.Error("Error decoding tx: %v", err)
+			return err
+		}
+
+		l2TxRaw := state.L2TxRaw{
+			EfficiencyPercentage: l2Tx.EffectiveGasPricePercentage,
+			TxAlreadyEncoded:     false,
+			Tx:                   *tx,
+		}
+		a.currentStreamL2Block.Transactions = append(a.currentStreamL2Block.Transactions, l2TxRaw)
+	case state.EntryTypeL2BlockEnd:
+		l2BlockEnd := state.DSL2BlockEnd{}.Decode(entry.Data)
+		a.currentStreamBatchRaw.Blocks = append(a.currentStreamBatchRaw.Blocks, a.currentStreamL2Block)
+		a.currentStreamBatch.StateRoot = l2BlockEnd.StateRoot
+	}
+
+	return nil
 }
 
 // Start starts the aggregator
@@ -155,7 +317,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	healthService := newHealthChecker()
 	grpchealth.RegisterHealthServer(a.srv, healthService)
 
-	// Initial sync blocking
+	// Initial L1 Sync blocking
 	err = a.l1Syncr.Sync(true)
 	if err != nil {
 		return err
@@ -168,12 +330,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	}
 
 	// Cleanup data base
-	err = a.state.DeleteAccInputHashesOlderThanBatchNumber(ctx, lastVerifiedBatchNumber, nil)
-	if err != nil {
-		return err
-	}
-
-	err = a.state.DeleteSequencesOlderThanBatchNumber(ctx, lastVerifiedBatchNumber, nil)
+	err = a.state.DeleteBatchesOlderThanBatchNumber(ctx, lastVerifiedBatchNumber, nil)
 	if err != nil {
 		return err
 	}
@@ -184,15 +341,46 @@ func (a *Aggregator) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize proofs cache %w", err)
 	}
 
-	err = a.getAndStoreAccInputHash(ctx, lastVerifiedBatchNumber)
+	accInputHash, err := a.getVerifiedBatchAccInputHash(ctx, lastVerifiedBatchNumber)
 	if err != nil {
 		return err
 	}
+
+	// Store Acc Input Hash of the latest verified batch
+	dummyBatch := state.Batch{BatchNumber: lastVerifiedBatchNumber - 1, AccInputHash: *accInputHash}
+	err = a.state.AddBatch(ctx, &dummyBatch, []byte{0}, nil)
+	if err != nil {
+		return err
+	}
+
+	a.resetVerifyProofTime()
+
+	go a.cleanupLockedProofs()
+	go a.sendFinalProof()
+	go a.ethTxManager.Start()
+
+	// Keep syncing L1
+	go func() {
+		err := a.l1Syncr.Sync(false)
+		if err != nil {
+			log.Errorf("Failed to synchronize from L1: %v", err)
+		}
+	}()
 
 	// Start stream client
 	err = a.streamClient.Start()
 	if err != nil {
 		log.Fatalf("failed to start stream client, error: %v", err)
+	}
+
+	bookMark := state.DSBookMark{
+		Type:  state.BookMarkTypeBatch,
+		Value: lastVerifiedBatchNumber,
+	}
+
+	err = a.streamClient.ExecCommandStartBookmark(bookMark.Encode())
+	if err != nil {
+		log.Fatalf("failed to connect to data stream: %v", err)
 	}
 
 	// A this point everything is ready, so start serving
@@ -203,19 +391,6 @@ func (a *Aggregator) Start(ctx context.Context) error {
 			log.Fatalf("Failed to serve: %v", err)
 		}
 	}()
-
-	a.resetVerifyProofTime()
-
-	go a.cleanupLockedProofs()
-	go a.sendFinalProof()
-	go func() {
-		err := a.l1Syncr.Sync(false)
-		if err != nil {
-			log.Errorf("Failed to synchronize from L1: %v", err)
-		}
-	}()
-
-	go a.ethTxManager.Start()
 
 	<-ctx.Done()
 	return ctx.Err()
@@ -323,7 +498,7 @@ func (a *Aggregator) sendFinalProof() {
 
 			a.startProofVerification()
 
-			_, finalBatch, err := a.getBatchFromDataStream(proof.BatchNumberFinal, time.Now())
+			finalBatch, _, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
 			if err != nil {
 				log.Errorf("Failed to retrieve batch with number [%d]: %v", proof.BatchNumberFinal, err)
 				a.endProofVerification()
@@ -403,7 +578,7 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, prover proverInterface
 	if string(finalProof.Public.NewStateRoot) == mockedStateRoot && string(finalProof.Public.NewLocalExitRoot) == mockedLocalExitRoot {
 		// This local exit root and state root come from the mock
 		// prover, use the one captured by the executor instead
-		_, finalBatch, err := a.getBatchFromDataStream(proof.BatchNumberFinal, time.Now())
+		finalBatch, _, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
 		}
@@ -795,112 +970,13 @@ func (a *Aggregator) tryAggregateProofs(ctx context.Context, prover proverInterf
 	return true, nil
 }
 
-func (a *Aggregator) getBatchFromDataStream(batchNumber uint64, batchTimestamp time.Time) ([]byte, *state.Batch, error) {
-	var batchStreamData []byte
-
-	fromBatchBookMark := state.DSBookMark{
-		Type:  state.BookMarkTypeBatch,
-		Value: batchNumber,
-	}
-
-	toBatchBookMark := state.DSBookMark{
-		Type:  state.BookMarkTypeBatch,
-		Value: batchNumber + 1,
-	}
-
-	fromEntry, err := a.streamClient.ExecCommandGetBookmark(fromBatchBookMark.Encode())
-	if err != nil {
-		return nil, nil, err
-	}
-
-	toEntry, err := a.streamClient.ExecCommandGetBookmark(toBatchBookMark.Encode())
-	if err != nil {
-		return nil, nil, err
-	}
-
-	l2BlockStart := state.DSL2BlockStart{}.Decode(fromEntry.Data)
-	batch := state.Batch{
-		L1InfoTreeIndex: l2BlockStart.L1InfoTreeIndex,
-		BatchNumber:     batchNumber,
-		Coinbase:        l2BlockStart.Coinbase,
-		GlobalExitRoot:  l2BlockStart.GlobalExitRoot,
-		Timestamp:       batchTimestamp,
-	}
-
-	batchRaw := state.BatchRawV2{
-		Blocks: make([]state.L2BlockRaw, 0),
-	}
-	var currentL2Block state.L2BlockRaw
-	entry := fromEntry
-	for entry.Number < toEntry.Number {
-		batchStreamData = append(batchStreamData, entry.Encode()...)
-
-		switch entry.Type {
-		case state.EntryTypeL2BlockStart:
-			l2BlockStart := state.DSL2BlockStart{}.Decode(entry.Data)
-			header := state.ChangeL2BlockHeader{
-				DeltaTimestamp:  l2BlockStart.DeltaTimestamp,
-				IndexL1InfoTree: l2BlockStart.L1InfoTreeIndex,
-			}
-			currentL2Block.ChangeL2BlockHeader = header
-			currentL2Block.Transactions = make([]state.L2TxRaw, 0)
-			currentL2Block.BlockNumber = l2BlockStart.L2BlockNumber
-			batch.L1InfoTreeIndex = l2BlockStart.L1InfoTreeIndex
-			batch.GlobalExitRoot = l2BlockStart.GlobalExitRoot
-		case state.EntryTypeL2Tx:
-			l2Tx := state.DSL2Transaction{}.Decode(entry.Data)
-			// New Tx raw
-			tx, err := state.DecodeTx(common.Bytes2Hex(l2Tx.Encoded))
-			if err != nil {
-				return nil, nil, err
-			}
-
-			l2TxRaw := state.L2TxRaw{
-				EfficiencyPercentage: l2Tx.EffectiveGasPricePercentage,
-				TxAlreadyEncoded:     false,
-				Tx:                   *tx,
-			}
-			currentL2Block.Transactions = append(currentL2Block.Transactions, l2TxRaw)
-		case state.EntryTypeL2BlockEnd:
-			l2BlockEnd := state.DSL2BlockEnd{}.Decode(entry.Data)
-			batchRaw.Blocks = append(batchRaw.Blocks, currentL2Block)
-			batch.StateRoot = l2BlockEnd.StateRoot
-		}
-
-		entry, err = a.streamClient.ExecCommandGetEntry(entry.Number + 1)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	// Get LER
-	l2BlockNumber := batchRaw.Blocks[0].BlockNumber
-	if l2BlockNumber > 0 {
-		ler, err := getLER(l2BlockNumber-1, a.cfg.WitnessURL, a.cfg.LERContract)
-		if err != nil {
-			return nil, nil, err
-		}
-		batch.LocalExitRoot = ler
-	}
-
-	batchl2Data, err := state.EncodeBatchV2(&batchRaw)
-	if err != nil {
-		return nil, nil, err
-	}
-	batch.BatchL2Data = batchl2Data
-
-	return batchStreamData, &batch, nil
-}
-
-func (a *Aggregator) getAndStoreAccInputHash(ctx context.Context, batchNumber uint64) error {
+func (a *Aggregator) getVerifiedBatchAccInputHash(ctx context.Context, batchNumber uint64) (*common.Hash, error) {
 	accInputHash, err := a.etherman.GetBatchAccInputHash(ctx, batchNumber)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	log.Debugf("AccInputHash for batch %v: %v", batchNumber, accInputHash.String())
-
-	return a.state.AddAccInputHash(ctx, batchNumber, accInputHash, nil)
+	return &accInputHash, nil
 }
 
 func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverInterface) ([]byte, *state.Batch, *state.Proof, error) {
@@ -935,7 +1011,7 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 		}
 	}
 
-	// Check if the batch exists
+	// Check if the batch has been sequenced
 	sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, batchNumberToVerify)
 	if err != nil {
 		log.Infof("No sequence found for batch %d", batchNumberToVerify)
@@ -958,15 +1034,7 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 		return nil, nil, nil, state.ErrNotFound
 	}
 
-	// Check if the acc input hash of the previous batch exists
-	_, err = a.state.GetAccInputHash(ctx, batchNumberToVerify-1, nil)
-	if err != nil {
-		log.Infof("No acc input hash found for batch %d", batchNumberToVerify)
-		return nil, nil, nil, state.ErrNotFound
-	}
-
-	// Get virtual batch pending to generate proof from the data stream
-	batchStreamData, batch, err := a.getBatchFromDataStream(batchNumberToVerify, sequence.Timestamp)
+	batch, datastream, err := a.state.GetBatch(ctx, batchNumberToVerify, nil)
 	if err != nil {
 		return nil, batch, nil, err
 	}
@@ -1005,7 +1073,7 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 		return nil, nil, nil, err
 	}
 
-	return batchStreamData, batch, proof, nil
+	return datastream, batch, proof, nil
 }
 
 func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInterface) (bool, error) {
@@ -1133,19 +1201,9 @@ func (a *Aggregator) resetVerifyProofTime() {
 }
 
 func (a *Aggregator) buildInputProver(ctx context.Context, batchStreamData []byte, batchToVerify *state.Batch) (*prover.StatelessInputProver, error) {
-	sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, batchToVerify.BatchNumber)
-	if err != nil {
-		log.Error("Error getting sequence for batch number %v", batchToVerify.BatchNumber)
-		return nil, err
-	}
-
-	if sequence == nil {
-		return nil, fmt.Errorf("sequence not found for batch number %v", batchToVerify.BatchNumber)
-	}
-	l1InfoRoot := sequence.L1InfoRoot
-
 	isForcedBatch := false
 	batchRawData := &state.BatchRawV2{}
+	var err error
 
 	if batchToVerify.BatchNumber == 1 || batchToVerify.ForcedBatchNum != nil {
 		isForcedBatch = true
@@ -1165,7 +1223,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchStreamData []byt
 			return nil, err
 		}
 
-		leaves, err := a.l1Syncr.GetLeafsByL1InfoRoot(ctx, l1InfoRoot, nil)
+		leaves, err := a.l1Syncr.GetLeafsByL1InfoRoot(ctx, batchToVerify.L1InfoRoot, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -1193,8 +1251,8 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchStreamData []byt
 					return nil, err
 				}
 
-				if l1InfoRoot != calculatedL1InfoRoot {
-					return nil, fmt.Errorf("error: l1InfoRoot mismatch. L1InfoRoot: %s, calculatedL1InfoRoot: %s. l1InfoTreeIndex: %d", l1InfoRoot.String(), calculatedL1InfoRoot.String(), l2blockRaw.IndexL1InfoTree)
+				if batchToVerify.L1InfoRoot != calculatedL1InfoRoot {
+					return nil, fmt.Errorf("error: l1InfoRoot mismatch. L1InfoRoot: %s, calculatedL1InfoRoot: %s. l1InfoTreeIndex: %d", batchToVerify.L1InfoRoot.String(), calculatedL1InfoRoot.String(), l2blockRaw.IndexL1InfoTree)
 				}
 
 				protoProof := make([][]byte, len(smtProof))
@@ -1226,24 +1284,6 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchStreamData []byt
 		}
 	}*/
 
-	// Calculate accInputHash
-	oldAccInputHash, err := a.state.GetAccInputHash(ctx, batchToVerify.BatchNumber-1, nil)
-	if err != nil {
-		log.Infof("No acc input hash found for batch %d", batchToVerify.BatchNumber-1)
-		return nil, err
-	}
-
-	accInputHash, err := calculateAccInputHash(oldAccInputHash, batchToVerify.BatchL2Data, l1InfoRoot, uint64(batchToVerify.Timestamp.Unix()), batchToVerify.Coinbase, forcedBlockhashL1)
-	if err != nil {
-		return nil, err
-	}
-
-	// Store new accInputHash
-	err = a.state.AddAccInputHash(ctx, batchToVerify.BatchNumber, accInputHash, nil)
-	if err != nil {
-		return nil, err
-	}
-
 	// Get Witness
 	witness, err := getWitness(batchToVerify.BatchNumber, a.cfg.WitnessURL)
 	if err != nil {
@@ -1255,17 +1295,23 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchStreamData []byt
 		log.Warnf("Witness length is %d bytes. Check full witness configuration on %s", len(witness), a.cfg.WitnessURL)
 	}
 
+	// Get Old Acc Input Hash
+	oldBatch, _, err := a.state.GetBatch(ctx, batchToVerify.BatchNumber, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	inputProver := &prover.StatelessInputProver{
 		PublicInputs: &prover.StatelessPublicInputs{
 			Witness:           witness,
 			DataStream:        batchStreamData,
-			OldAccInputHash:   oldAccInputHash.Bytes(),
-			L1InfoRoot:        l1InfoRoot.Bytes(),
+			OldAccInputHash:   oldBatch.AccInputHash.Bytes(),
+			L1InfoRoot:        batchToVerify.L1InfoRoot.Bytes(),
 			TimestampLimit:    uint64(batchToVerify.Timestamp.Unix()),
 			SequencerAddr:     batchToVerify.Coinbase.String(),
 			AggregatorAddr:    a.cfg.SenderAddress,
 			L1InfoTreeData:    l1InfoTreeData,
-			ForcedBlockhashL1: common.Hash{}.Bytes(),
+			ForcedBlockhashL1: forcedBlockhashL1.Bytes(),
 		},
 	}
 
@@ -1348,7 +1394,7 @@ func getLER(blockNumber uint64, URL string, LERContract string) (common.Hash, er
 func printInputProver(inputProver *prover.StatelessInputProver) {
 	log.Debugf("Witness length: %v", len(inputProver.PublicInputs.Witness))
 	log.Debugf("DataStream length: %v", len(inputProver.PublicInputs.DataStream))
-	// log.Infof("Full DataStream: %v", common.Bytes2Hex(inputProver.PublicInputs.DataStream))
+	// log.Debugf("Full DataStream: %v", common.Bytes2Hex(inputProver.PublicInputs.DataStream))
 	log.Debugf("OldAccInputHash: %v", common.BytesToHash(inputProver.PublicInputs.OldAccInputHash))
 	log.Debugf("L1InfoRoot: %v", common.BytesToHash(inputProver.PublicInputs.L1InfoRoot))
 	log.Debugf("TimestampLimit: %v", inputProver.PublicInputs.TimestampLimit)
