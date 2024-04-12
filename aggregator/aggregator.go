@@ -188,6 +188,16 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					log.Errorf("Error getting batch %d: %v", a.currentStreamBatch.BatchNumber-1, err)
 					return err
 				}
+				/*
+					if a.currentStreamBatch.BatchNumber == 1139 {
+						log.Infof("oldBatch.AccInputHash:%v", oldBatch.AccInputHash.String())
+						log.Infof("batchl2Data:%v", common.Bytes2Hex(batchl2Data))
+						log.Infof("a.currentStreamBatch.L1InfoRoot: %v", a.currentStreamBatch.L1InfoRoot.String())
+						log.Infof("timestamp:%v", uint64(a.currentStreamBatch.Timestamp.Unix()))
+						log.Infof("a.currentStreamBatch.Coinbase:%v", a.currentStreamBatch.Coinbase.String())
+						log.Fatal("")
+					}
+				*/
 
 				accInputHash, err := calculateAccInputHash(oldBatch.AccInputHash, batchl2Data, a.currentStreamBatch.L1InfoRoot, uint64(a.currentStreamBatch.Timestamp.Unix()), a.currentStreamBatch.Coinbase, forcedBlockhashL1)
 				if err != nil {
@@ -324,10 +334,13 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	}
 
 	// Get last verified batch number to set the starting point for verifications
+
 	lastVerifiedBatchNumber, err := a.etherman.GetLatestVerifiedBatchNum()
 	if err != nil {
 		return err
 	}
+
+	// lastVerifiedBatchNumber := uint64(1138)
 
 	// Cleanup data base
 	err = a.state.DeleteBatchesOlderThanBatchNumber(ctx, lastVerifiedBatchNumber, nil)
@@ -346,8 +359,11 @@ func (a *Aggregator) Start(ctx context.Context) error {
 		return err
 	}
 
+	log.Infof("Last Verified Batch Number:%v", lastVerifiedBatchNumber)
+	log.Infof("Starting AccInputHash:%v", accInputHash.String())
+
 	// Store Acc Input Hash of the latest verified batch
-	dummyBatch := state.Batch{BatchNumber: lastVerifiedBatchNumber - 1, AccInputHash: *accInputHash}
+	dummyBatch := state.Batch{BatchNumber: lastVerifiedBatchNumber, AccInputHash: *accInputHash}
 	err = a.state.AddBatch(ctx, &dummyBatch, []byte{0}, nil)
 	if err != nil {
 		return err
@@ -375,7 +391,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 
 	bookMark := state.DSBookMark{
 		Type:  state.BookMarkTypeBatch,
-		Value: lastVerifiedBatchNumber,
+		Value: lastVerifiedBatchNumber + 1,
 	}
 
 	err = a.streamClient.ExecCommandStartBookmark(bookMark.Encode())
@@ -1296,7 +1312,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchStreamData []byt
 	}
 
 	// Get Old Acc Input Hash
-	oldBatch, _, err := a.state.GetBatch(ctx, batchToVerify.BatchNumber, nil)
+	oldBatch, _, err := a.state.GetBatch(ctx, batchToVerify.BatchNumber-1, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1392,16 +1408,16 @@ func getLER(blockNumber uint64, URL string, LERContract string) (common.Hash, er
 }
 
 func printInputProver(inputProver *prover.StatelessInputProver) {
-	log.Debugf("Witness length: %v", len(inputProver.PublicInputs.Witness))
-	log.Debugf("DataStream length: %v", len(inputProver.PublicInputs.DataStream))
-	// log.Debugf("Full DataStream: %v", common.Bytes2Hex(inputProver.PublicInputs.DataStream))
-	log.Debugf("OldAccInputHash: %v", common.BytesToHash(inputProver.PublicInputs.OldAccInputHash))
-	log.Debugf("L1InfoRoot: %v", common.BytesToHash(inputProver.PublicInputs.L1InfoRoot))
-	log.Debugf("TimestampLimit: %v", inputProver.PublicInputs.TimestampLimit)
-	log.Debugf("SequencerAddr: %v", inputProver.PublicInputs.SequencerAddr)
-	log.Debugf("AggregatorAddr: %v", inputProver.PublicInputs.AggregatorAddr)
-	log.Debugf("L1InfoTreeData: %+v", inputProver.PublicInputs.L1InfoTreeData)
-	log.Debugf("ForcedBlockhashL1: %v", common.Bytes2Hex(inputProver.PublicInputs.ForcedBlockhashL1))
+	log.Infof("Witness length: %v", len(inputProver.PublicInputs.Witness))
+	log.Infof("DataStream length: %v", len(inputProver.PublicInputs.DataStream))
+	// log.Infof("Full DataStream: %v", common.Bytes2Hex(inputProver.PublicInputs.DataStream))
+	log.Infof("OldAccInputHash: %v", common.BytesToHash(inputProver.PublicInputs.OldAccInputHash))
+	log.Infof("L1InfoRoot: %v", common.BytesToHash(inputProver.PublicInputs.L1InfoRoot))
+	log.Infof("TimestampLimit: %v", inputProver.PublicInputs.TimestampLimit)
+	log.Infof("SequencerAddr: %v", inputProver.PublicInputs.SequencerAddr)
+	log.Infof("AggregatorAddr: %v", inputProver.PublicInputs.AggregatorAddr)
+	log.Infof("L1InfoTreeData: %+v", inputProver.PublicInputs.L1InfoTreeData)
+	log.Infof("ForcedBlockhashL1: %v", common.Bytes2Hex(inputProver.PublicInputs.ForcedBlockhashL1))
 }
 
 // healthChecker will provide an implementation of the HealthCheck interface.
