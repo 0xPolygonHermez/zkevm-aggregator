@@ -1292,9 +1292,9 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchStreamData []byt
 	return inputProver, nil
 }
 
-func calculateAccInputHash(oldAccInputHash common.Hash, batchHashData []byte, l1InfoRoot common.Hash, timestampLimit uint64, sequencerAddr common.Address, forcedBlockhashL1 common.Hash) (common.Hash, error) {
+func calculateAccInputHash(oldAccInputHash common.Hash, batchData []byte, l1InfoRoot common.Hash, timestampLimit uint64, sequencerAddr common.Address, forcedBlockhashL1 common.Hash) (common.Hash, error) {
 	v1 := oldAccInputHash.Bytes()
-	v2 := batchHashData
+	v2 := batchData
 	v3 := l1InfoRoot.Bytes()
 	v4 := big.NewInt(0).SetUint64(timestampLimit).Bytes()
 	v5 := sequencerAddr.Bytes()
