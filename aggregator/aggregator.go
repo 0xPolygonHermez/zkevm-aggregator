@@ -106,6 +106,8 @@ func New(ctx context.Context, cfg Config, stateInterface stateInterface, etherma
 		Outputs:     cfg.Log.Outputs,
 	}
 
+	log.Init(cfg.Log)
+
 	log.Info("Creating data stream client....")
 	streamClient, err := datastreamer.NewClientWithLogsConfig(cfg.StreamClient.Server, dataStreamType, streamLogConfig)
 	if err != nil {
