@@ -25,7 +25,6 @@ cmd/__debug_bin
 
 .venv
 
-/test/**/*
-/test/config/test.aggregator.config.toml
+/test/aggregator.keystore
 
 *metrics.txt

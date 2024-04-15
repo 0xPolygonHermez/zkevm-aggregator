@@ -1,32 +1,3 @@
-IsTrustedSequencer = true
-
-[Log]
-Environment = "development" # "production" or "development"
-Level = "debug"
-Outputs = ["stderr"]
-
-[State]
-	[State.DB]
-	Name = "aggregator_db"
-	User = "aggregator_user"
-	Password = "aggregator_password"
-	Host = "zkevm-aggregator-db"
-	Port = "5432"
-	EnableLog = false	
-	MaxConns = 200
-	[State.Batch]
-		[State.Batch.Constraints]
-		MaxTxsPerBatch = 300
-		MaxBatchBytesSize = 120000
-		MaxCumulativeGasUsed = 30000000
-		MaxKeccakHashes = 2145
-		MaxPoseidonHashes = 252357
-		MaxPoseidonPaddings = 135191
-		MaxMemAligns = 236585
-		MaxArithmetics = 236585
-		MaxBinaries = 473170
-		MaxSteps = 7570538
-		MaxSHA256Hashes = 1596
 
 [Aggregator]
 Host = "0.0.0.0"
@@ -36,14 +7,27 @@ VerifyProofInterval = "10s"
 TxProfitabilityCheckerType = "acceptall"
 TxProfitabilityMinReward = "1.1"
 ProofStatePollingInterval = "5s"
-SenderAddress = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+SenderAddress = "0x3f2963d678442c4af27a797453b64ef6ce9443e9"
 CleanupLockedProofsInterval = "2m"
 GeneratingProofCleanupThreshold = "10m"
-UpgradeEtrogBatchNumber = 0
-BatchProofL1BlockConfirmations = 2
-WitnessURL = "http://cdk-erigon:9545"
+ForkId = 9
+WitnessURL = "http://zkevm-erigon-seq:8123"
+LERContract = "0xa40D5f56745a118D0906a34E69aeC8C0Db1cB8fA"
+	[Aggregator.DB]
+		Name = "aggregator_db"
+		User = "aggregator_user"
+		Password = "aggregator_password"
+		Host = "zkevm-db"
+		Port = "5432"
+		EnableLog = false	
+		MaxConns = 200
+	[Aggregator.Log]
+		Environment = "development" # "production" or "development"
+		Level = "info"
+		Outputs = ["stderr"]
 	[Aggregator.StreamClient]
-		Server = "datastream.internal.zkevm-rpc.com:6900"
+		Server = "zkevm-erigon-seq:6900"
+		# Server = "zkevm-rpc2:6900"
 	[Aggregator.EthTxManager]
 		FrequencyToMonitorTxs = "1s"
 		WaitTxToBeMined = "2m"
@@ -56,43 +40,24 @@ WitnessURL = "http://cdk-erigon:9545"
 		ForcedGas = 0
 		GasPriceMarginFactor = 1
 		MaxGasPriceLimit = 0
-		PersistenceFilename = "ethtxmanager_aggregator.json"
+		PersistenceFilename = "/ethtxmanager_aggregator.json"
 			[Aggregator.EthTxManager.Etherman]
-				URL = "http://zkevm-mock-l1-network:8545"
-				MultiGasProvider = false
-				L1ChainID = 1337
+				URL = ""
+				L1ChainID = 11155111
 				HTTPHeaders = []
 	[Aggregator.Synchronizer]
-		[Aggregator.Synchronizer.Log]
-		Environment = "development" # "production" or "development"
-		Level = "info"
-		Outputs = ["stderr"]
 		[Aggregator.Synchronizer.DB]
-		Name = "sync"
-		User = "test_user"
-		Password = "test_password"
-		Host = "zkevm-l1-sync-db"
+		Name = "sync_db"
+		User = "sync_user"
+		Password = "sync_password"
+		Host = "zkevm-db"
 		Port = "5432"
 		EnableLog = false
 		MaxConns = 10
 		[Aggregator.Synchronizer.Synchronizer]
 		SyncInterval = "10s"
 		SyncChunkSize = 1000
-		GenesisBlockNumber = 5157839
-		[Aggregator.Synchronizer.Etherman]
-		L1URL = "http://zkevm-mock-l1-network:8545"
-		[Aggregator.Synchronizer.Etherman.Contracts]
-		GlobalExitRootManagerAddr = "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318"
-		RollupManagerAddr = "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
-		ZkEVMAddr = "0x8dAF17A20c9DBA35f005b6324F493785D239719d"
-
-[Etherman]
-URL = "http://zkevm-mock-l1-network:8545"
-ForkIDChunkSize = 20000
-MultiGasProvider = false
-	[Etherscan]
-		ApiKey = ""
+		GenesisBlockNumber = 5511080
 
 [EventLog]
 	[EventLog.DB]
-	
