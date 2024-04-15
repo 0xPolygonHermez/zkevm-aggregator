@@ -5,7 +5,6 @@ import (
 	"math/big"
 
 	"github.com/0xPolygonHermez/zkevm-aggregator/config/types"
-	"github.com/0xPolygonHermez/zkevm-aggregator/db"
 	"github.com/0xPolygonHermez/zkevm-aggregator/encoding"
 	"github.com/0xPolygonHermez/zkevm-aggregator/log"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
@@ -95,9 +94,6 @@ type Config struct {
 
 	// LERContract is the contract address to get the LER from
 	LERContract string `mapstructure:"LERContract"`
-
-	// DB is the database configuration
-	DB db.Config `mapstructure:"DB"`
 
 	// StreamClient is the config for the stream client
 	StreamClient StreamClientCfg `mapstructure:"StreamClient"`

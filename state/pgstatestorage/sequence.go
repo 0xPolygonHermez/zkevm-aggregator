@@ -15,3 +15,11 @@ func (p *PostgresStorage) AddSequence(ctx context.Context, sequence state.Sequen
 	_, err := e.Exec(ctx, addSequenceSQL, sequence.FromBatchNumber, sequence.ToBatchNumber)
 	return err
 }
+
+// DeleteSequencesOlderThanBatchNumber deletes sequences previous to the given batch number
+func (p *PostgresStorage) DeleteSequencesOlderThanBatchNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) error {
+	const deleteGeneratedProofSQL = "DELETE FROM aggregator.sequence WHERE to_batch_num < $1"
+	e := p.getExecQuerier(dbTx)
+	_, err := e.Exec(ctx, deleteGeneratedProofSQL, batchNumber)
+	return err
+}
