@@ -23,6 +23,8 @@ type L1Config struct {
 	ZkEVMAddr common.Address `json:"polygonZkEVMAddress"`
 	// RollupManagerAddr Address of the L1 contract
 	RollupManagerAddr common.Address `json:"polygonRollupManagerAddress"`
+	// GER Manager ADdress of the L1 contract
+	GlobalExitRootManagerAddr common.Address `json:"polygonZkEVMGlobalExitRootAddress"`
 }
 
 // Client is a simple implementation of EtherMan.

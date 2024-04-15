@@ -49,11 +49,11 @@ func start(cliCtx *cli.Context) error {
 
 	// Migrations
 	if !cliCtx.Bool(config.FlagMigrations) {
-		log.Infof("Running DB migrations host: %s:%s db:%s user:%s", c.State.DB.Host, c.State.DB.Port, c.State.DB.Name, c.State.DB.User)
-		runAggregatorMigrations(c.State.DB)
+		log.Infof("Running DB migrations host: %s:%s db:%s user:%s", c.Aggregator.DB.Host, c.Aggregator.DB.Port, c.Aggregator.DB.Name, c.Aggregator.DB.User)
+		runAggregatorMigrations(c.Aggregator.DB)
 	}
 
-	checkAggregatorMigrations(c.State.DB)
+	checkAggregatorMigrations(c.Aggregator.DB)
 
 	var (
 		eventLog     *event.EventLog
@@ -75,7 +75,7 @@ func start(cliCtx *cli.Context) error {
 	eventLog = event.NewEventLog(c.EventLog, eventStorage)
 
 	// Core State DB
-	stateSqlDB, err := db.NewSQLDB(c.State.DB)
+	stateSqlDB, err := db.NewSQLDB(c.Aggregator.DB)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -105,6 +105,12 @@ func start(cliCtx *cli.Context) error {
 	if c.Metrics.ProfilingEnabled {
 		go startProfilingHttpServer(c.Metrics)
 	}
+
+	// Populate Network config
+	c.Aggregator.Synchronizer.Etherman.Contracts.GlobalExitRootManagerAddr = c.NetworkConfig.L1Config.GlobalExitRootManagerAddr
+	c.Aggregator.Synchronizer.Etherman.Contracts.RollupManagerAddr = c.NetworkConfig.L1Config.RollupManagerAddr
+	c.Aggregator.Synchronizer.Etherman.Contracts.ZkEVMAddr = c.NetworkConfig.L1Config.ZkEVMAddr
+
 	for _, component := range components {
 		switch component {
 		case AGGREGATOR:
@@ -151,7 +157,10 @@ func runMigrations(c db.Config, name string) {
 }
 
 func newEtherman(c config.Config) (*etherman.Client, error) {
-	return etherman.NewClient(c.Etherman, c.NetworkConfig.L1Config)
+	config := etherman.Config{
+		URL: c.Aggregator.EthTxManager.Etherman.URL,
+	}
+	return etherman.NewClient(config, c.NetworkConfig.L1Config)
 }
 
 func runAggregator(ctx context.Context, config aggregator.Config, etherman *etherman.Client, st *state.State) {
@@ -184,11 +193,12 @@ func waitSignal(cancelFuncs []context.CancelFunc) {
 }
 
 func newState(c *config.Config, l2ChainID uint64, sqlDB *pgxpool.Pool, eventLog *event.EventLog) *state.State {
-	stateDb := pgstatestorage.NewPostgresStorage(c.State, sqlDB)
-
 	stateCfg := state.Config{
+		DB:      c.Aggregator.DB,
 		ChainID: l2ChainID,
 	}
+
+	stateDb := pgstatestorage.NewPostgresStorage(stateCfg, sqlDB)
 
 	st := state.NewState(stateCfg, stateDb, eventLog)
 	return st

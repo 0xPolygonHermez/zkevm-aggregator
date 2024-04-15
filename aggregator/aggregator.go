@@ -114,6 +114,7 @@ func New(ctx context.Context, cfg Config, stateInterface stateInterface, etherma
 	log.Info("Data stream client created.")
 
 	// Create L1 synchronizer client
+	cfg.Synchronizer.Etherman.L1URL = cfg.EthTxManager.Etherman.URL
 	log.Debugf("Creating synchronizer client with config: %+v", cfg.Synchronizer)
 	l1Syncr, err := synchronizer.NewSynchronizer(ctx, cfg.Synchronizer)
 	if err != nil {
@@ -159,7 +160,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 				if l2BlockNumber > 0 {
 					ler, err := getLER(l2BlockNumber-1, a.cfg.WitnessURL, a.cfg.LERContract)
 					if err != nil {
-						log.Error("Error getting LER: %v", err)
+						log.Errorf("Error getting LER: %v", err)
 						return err
 					}
 					a.currentStreamBatch.LocalExitRoot = ler
@@ -167,7 +168,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 				batchl2Data, err := state.EncodeBatchV2(&a.currentStreamBatchRaw)
 				if err != nil {
-					log.Error("Error encoding batch: %v", err)
+					log.Errorf("Error encoding batch: %v", err)
 					return err
 				}
 				a.currentStreamBatch.BatchL2Data = batchl2Data
@@ -175,7 +176,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 				// Ger L1InfoRoot
 				sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
 				if err != nil {
-					log.Error("Error getting sequence: %v", err)
+					log.Errorf("Error getting sequence: %v", err)
 					return err
 				}
 
@@ -188,20 +189,10 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					log.Errorf("Error getting batch %d: %v", a.currentStreamBatch.BatchNumber-1, err)
 					return err
 				}
-				/*
-					if a.currentStreamBatch.BatchNumber == 1139 {
-						log.Infof("oldBatch.AccInputHash:%v", oldBatch.AccInputHash.String())
-						log.Infof("batchl2Data:%v", common.Bytes2Hex(batchl2Data))
-						log.Infof("a.currentStreamBatch.L1InfoRoot: %v", a.currentStreamBatch.L1InfoRoot.String())
-						log.Infof("timestamp:%v", uint64(a.currentStreamBatch.Timestamp.Unix()))
-						log.Infof("a.currentStreamBatch.Coinbase:%v", a.currentStreamBatch.Coinbase.String())
-						log.Fatal("")
-					}
-				*/
 
 				accInputHash, err := calculateAccInputHash(oldBatch.AccInputHash, batchl2Data, a.currentStreamBatch.L1InfoRoot, uint64(a.currentStreamBatch.Timestamp.Unix()), a.currentStreamBatch.Coinbase, forcedBlockhashL1)
 				if err != nil {
-					log.Error("Error calculating acc input hash: %v", err)
+					log.Errorf("Error calculating acc input hash: %v", err)
 					return err
 				}
 
@@ -212,54 +203,18 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 				err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentBatchStreamData, nil)
 				if err != nil {
-					log.Error("Error adding batch: %v", err)
+					log.Errorf("Error adding batch: %v", err)
 					return err
 				}
 			}
 
-			// Init new Batch
-			/*
-				sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, l2BlockStart.BatchNumber)
-				if err != nil {
-					log.Error("Error getting sequence: %v", err)
-					return err
-				}
-			*/
-
-			/*
-				if sequence == nil {
-					a.currentBatchStreamData = []byte{}
-					// log.Infof("l2blockstart entry: %v", entry.Number)
-					// log.Infof("Sequence for batch %d is nil", l2BlockStart.BatchNumber)
-
-					time.Sleep(5 * time.Second)
-
-					bookMark := state.DSBookMark{
-						Type:  state.BookMarkTypeBatch,
-						Value: l2BlockStart.BatchNumber - 1,
-					}
-					err = a.streamClient.ExecCommandStop()
-					if err != nil {
-						log.Error(err)
-						return err
-					}
-
-					err = a.streamClient.ExecCommandStartBookmark(bookMark.Encode())
-					if err != nil {
-						log.Error(err)
-					}
-					return err
-				}
-			*/
 			a.currentBatchStreamData = []byte{}
 			a.currentBatchStreamData = append(a.currentBatchStreamData, entry.Encode()...)
 			a.currentStreamBatch = state.Batch{
 				L1InfoTreeIndex: l2BlockStart.L1InfoTreeIndex,
-				// L1InfoRoot:      sequence.L1InfoRoot,
-				BatchNumber:    l2BlockStart.BatchNumber,
-				Coinbase:       l2BlockStart.Coinbase,
-				GlobalExitRoot: l2BlockStart.GlobalExitRoot,
-				// Timestamp:      sequence.Timestamp,
+				BatchNumber:     l2BlockStart.BatchNumber,
+				Coinbase:        l2BlockStart.Coinbase,
+				GlobalExitRoot:  l2BlockStart.GlobalExitRoot,
 			}
 
 			a.currentStreamBatchRaw = state.BatchRawV2{
@@ -284,7 +239,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 		// New Tx raw
 		tx, err := state.DecodeTx(common.Bytes2Hex(l2Tx.Encoded))
 		if err != nil {
-			log.Error("Error decoding tx: %v", err)
+			log.Errorf("Error decoding tx: %v", err)
 			return err
 		}
 
