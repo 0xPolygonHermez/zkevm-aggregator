@@ -291,13 +291,10 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	}
 
 	// Get last verified batch number to set the starting point for verifications
-
 	lastVerifiedBatchNumber, err := a.etherman.GetLatestVerifiedBatchNum()
 	if err != nil {
 		return err
 	}
-
-	// lastVerifiedBatchNumber := uint64(1138)
 
 	// Cleanup data base
 	err = a.state.DeleteBatchesOlderThanBatchNumber(ctx, lastVerifiedBatchNumber, nil)
@@ -1365,16 +1362,16 @@ func getLER(blockNumber uint64, URL string, LERContract string) (common.Hash, er
 }
 
 func printInputProver(inputProver *prover.StatelessInputProver) {
-	log.Infof("Witness length: %v", len(inputProver.PublicInputs.Witness))
-	log.Infof("DataStream length: %v", len(inputProver.PublicInputs.DataStream))
-	// log.Infof("Full DataStream: %v", common.Bytes2Hex(inputProver.PublicInputs.DataStream))
-	log.Infof("OldAccInputHash: %v", common.BytesToHash(inputProver.PublicInputs.OldAccInputHash))
-	log.Infof("L1InfoRoot: %v", common.BytesToHash(inputProver.PublicInputs.L1InfoRoot))
-	log.Infof("TimestampLimit: %v", inputProver.PublicInputs.TimestampLimit)
-	log.Infof("SequencerAddr: %v", inputProver.PublicInputs.SequencerAddr)
-	log.Infof("AggregatorAddr: %v", inputProver.PublicInputs.AggregatorAddr)
-	log.Infof("L1InfoTreeData: %+v", inputProver.PublicInputs.L1InfoTreeData)
-	log.Infof("ForcedBlockhashL1: %v", common.Bytes2Hex(inputProver.PublicInputs.ForcedBlockhashL1))
+	log.Debugf("Witness length: %v", len(inputProver.PublicInputs.Witness))
+	log.Debugf("DataStream length: %v", len(inputProver.PublicInputs.DataStream))
+	// log.Debugf("Full DataStream: %v", common.Bytes2Hex(inputProver.PublicInputs.DataStream))
+	log.Debugf("OldAccInputHash: %v", common.BytesToHash(inputProver.PublicInputs.OldAccInputHash))
+	log.Debugf("L1InfoRoot: %v", common.BytesToHash(inputProver.PublicInputs.L1InfoRoot))
+	log.Debugf("TimestampLimit: %v", inputProver.PublicInputs.TimestampLimit)
+	log.Debugf("SequencerAddr: %v", inputProver.PublicInputs.SequencerAddr)
+	log.Debugf("AggregatorAddr: %v", inputProver.PublicInputs.AggregatorAddr)
+	log.Debugf("L1InfoTreeData: %+v", inputProver.PublicInputs.L1InfoTreeData)
+	log.Debugf("ForcedBlockhashL1: %v", common.Bytes2Hex(inputProver.PublicInputs.ForcedBlockhashL1))
 }
 
 // healthChecker will provide an implementation of the HealthCheck interface.

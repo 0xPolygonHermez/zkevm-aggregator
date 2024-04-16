@@ -45,7 +45,6 @@ func start(cliCtx *cli.Context) error {
 	if c.Metrics.Enabled {
 		metrics.Init()
 	}
-	components := cliCtx.StringSlice(config.FlagComponents)
 
 	// Migrations
 	if !cliCtx.Bool(config.FlagMigrations) {
@@ -111,18 +110,13 @@ func start(cliCtx *cli.Context) error {
 	c.Aggregator.Synchronizer.Etherman.Contracts.RollupManagerAddr = c.NetworkConfig.L1Config.RollupManagerAddr
 	c.Aggregator.Synchronizer.Etherman.Contracts.ZkEVMAddr = c.NetworkConfig.L1Config.ZkEVMAddr
 
-	for _, component := range components {
-		switch component {
-		case AGGREGATOR:
-			ev.Component = event.Component_Aggregator
-			ev.Description = "Running aggregator"
-			err := eventLog.LogEvent(cliCtx.Context, ev)
-			if err != nil {
-				log.Fatal(err)
-			}
-			go runAggregator(cliCtx.Context, c.Aggregator, etherman, st)
-		}
+	ev.Component = event.Component_Aggregator
+	ev.Description = "Running aggregator"
+	err = eventLog.LogEvent(cliCtx.Context, ev)
+	if err != nil {
+		log.Fatal(err)
 	}
+	go runAggregator(cliCtx.Context, c.Aggregator, etherman, st)
 
 	if c.Metrics.Enabled {
 		go startMetricsHttpServer(c.Metrics)

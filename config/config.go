@@ -25,24 +25,12 @@ const (
 	FlagNetwork = "network"
 	// FlagCustomNetwork is the flag for the custom network file. This is required if --network=custom
 	FlagCustomNetwork = "custom-network-file"
-	// FlagAmount is the flag for amount.
-	FlagAmount = "amount"
-	// FlagRemoteMT is the flag for remote-merkletree.
-	FlagRemoteMT = "remote-merkletree"
-	// FlagComponents is the flag for components.
-	FlagComponents = "components"
-	// FlagHTTPAPI is the flag for http.api.
-	FlagHTTPAPI = "http.api"
 	// FlagKeyStorePath is the path of the key store file containing the private key of the account going to sing and approve the tokens
 	FlagKeyStorePath = "key-store-path"
 	// FlagPassword is the password needed to decrypt the key store
 	FlagPassword = "password"
 	// FlagMigrations is the flag for migrations.
 	FlagMigrations = "migrations"
-	// FlagOutputFile is the flag for the output file
-	FlagOutputFile = "output"
-	// FlagMaxAmount is the flag to avoid to use the flag FlagAmount
-	FlagMaxAmount = "max-amount"
 	// FlagDocumentationFileType is the flag for the choose which file generate json-schema
 	FlagDocumentationFileType = "config-file"
 )
