@@ -16,13 +16,6 @@ const (
 	AGGREGATOR = "aggregator"
 )
 
-const (
-	// NODE_CONFIGFILE name to identify the node config-file
-	NODE_CONFIGFILE = "node"
-	// NETWORK_CONFIGFILE name to identify the netowk_custom (genesis) config-file
-	NETWORK_CONFIGFILE = "custom_network"
-)
-
 var (
 	configFileFlag = cli.StringFlag{
 		Name:     config.FlagCfg,
@@ -61,7 +54,7 @@ func main() {
 		{
 			Name:    "run",
 			Aliases: []string{},
-			Usage:   "Run the zkevm-node",
+			Usage:   "Run the zkevm-aggregator",
 			Action:  start,
 			Flags:   append(flags, &networkFlag, &customNetworkFlag),
 		},

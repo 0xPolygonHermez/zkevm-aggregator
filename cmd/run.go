@@ -33,12 +33,12 @@ func start(cliCtx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	setupLog(c.Log)
+	setupLog(c.Aggregator.Log)
 
-	if c.Log.Environment == log.EnvironmentDevelopment {
+	if c.Aggregator.Log.Environment == log.EnvironmentDevelopment {
 		zkevm.PrintVersion(os.Stdout)
 		log.Info("Starting application")
-	} else if c.Log.Environment == log.EnvironmentProduction {
+	} else if c.Aggregator.Log.Environment == log.EnvironmentProduction {
 		logVersion()
 	}
 

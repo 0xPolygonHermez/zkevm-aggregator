@@ -47,14 +47,12 @@ You could find some examples:
 [TOML format]: https://en.wikipedia.org/wiki/TOML
 */
 type Config struct {
-	// Configure Log level for all the services, allow also to store the logs in a file
-	Log log.Config
 	// Configuration of the etherman (client for access L1)
 	Etherman etherman.Config
 	// Configuration for ethereum transaction manager
 	EthTxManager ethtxmanager.Config
 	// Configuration of the aggregator service
-	Aggregator aggregator.Config
+	Aggregator aggregator.Config `mapstructure:"Aggregator"`
 	// Configuration of the genesis of the network. This is used to known the initial state of the network
 	NetworkConfig NetworkConfig
 	// Configuration of the metrics service, basically is where is going to publish the metrics
@@ -99,7 +97,7 @@ func Load(ctx *cli.Context, loadNetworkConfig bool) (*Config, error) {
 	viper.AutomaticEnv()
 	replacer := strings.NewReplacer(".", "_")
 	viper.SetEnvKeyReplacer(replacer)
-	viper.SetEnvPrefix("ZKEVM_NODE")
+	viper.SetEnvPrefix("ZKEVM_AGGREGATOR")
 	err = viper.ReadInConfig()
 	if err != nil {
 		_, ok := err.(viper.ConfigFileNotFoundError)
