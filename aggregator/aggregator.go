@@ -983,7 +983,7 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 
 	// Check if the batch has been sequenced
 	sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, batchNumberToVerify)
-	if err != nil {
+	if err != nil || sequence == nil {
 		log.Infof("No sequence found for batch %d", batchNumberToVerify)
 		return nil, nil, nil, err
 	}
