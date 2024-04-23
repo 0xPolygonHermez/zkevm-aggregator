@@ -174,6 +174,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					return err
 				}
 				a.currentStreamBatch.BatchL2Data = batchl2Data
+				log.Debugf("BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
 
 				// Ger L1InfoRoot
 				sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
