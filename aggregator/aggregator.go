@@ -174,13 +174,27 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					return err
 				}
 				a.currentStreamBatch.BatchL2Data = batchl2Data
-				log.Debugf("BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
+				if len(batchl2Data) > 0 {
+					log.Debugf("BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
+				} else {
+					log.Debugf("BatchL2Data is empty")
+				}
 
 				// Ger L1InfoRoot
 				sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
 				if err != nil {
 					log.Errorf("Error getting sequence: %v", err)
 					return err
+				}
+
+				for sequence == nil {
+					log.Debug("Waiting for sequence to be available")
+					time.Sleep(5 * time.Second) // nolint:gomnd
+					sequence, err = a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+					if err != nil {
+						log.Errorf("Error getting sequence: %v", err)
+						return err
+					}
 				}
 
 				a.currentStreamBatch.L1InfoRoot = sequence.L1InfoRoot
