@@ -20,6 +20,7 @@ import (
 	"github.com/0xPolygonHermez/zkevm-aggregator/log"
 	"github.com/0xPolygonHermez/zkevm-aggregator/rpclient"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state"
+	"github.com/0xPolygonHermez/zkevm-aggregator/state/datastream"
 	"github.com/0xPolygonHermez/zkevm-data-streamer/datastreamer"
 	streamlog "github.com/0xPolygonHermez/zkevm-data-streamer/log"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
@@ -30,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 	grpchealth "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -151,108 +153,114 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 	a.currentBatchStreamData = append(a.currentBatchStreamData, entry.Encode()...)
 
 	switch entry.Type {
-	case state.EntryTypeL2BlockStart:
-		l2BlockStart := state.DSL2BlockStart{}.Decode(entry.Data)
+	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_BATCH):
+		batch := &datastream.Batch{}
+		err := json.Unmarshal(entry.Data, batch)
+		if err != nil {
+			log.Errorf("Error unmarshalling batch: %v", err)
+			return err
+		}
 
-		if l2BlockStart.BatchNumber > a.currentStreamBatch.BatchNumber {
-			// Save Current Batch
-			if a.currentStreamBatch.BatchNumber != 0 {
-				// Get LER
-				l2BlockNumber := a.currentStreamBatchRaw.Blocks[0].BlockNumber
-				if l2BlockNumber > 0 {
-					ler, err := getLER(l2BlockNumber-1, a.cfg.WitnessURL, a.cfg.LERContract)
-					if err != nil {
-						log.Errorf("Error getting LER: %v", err)
-						return err
-					}
-					a.currentStreamBatch.LocalExitRoot = ler
-				}
+		a.currentStreamBatch.BatchNumber = batch.Number
+		a.currentStreamBatch.LocalExitRoot = common.BytesToHash(batch.LocalExitRoot)
+		a.currentStreamBatch.StateRoot = common.BytesToHash(batch.StateRoot)
 
-				batchl2Data, err := state.EncodeBatchV2(&a.currentStreamBatchRaw)
-				if err != nil {
-					log.Errorf("Error encoding batch: %v", err)
-					return err
-				}
-				a.currentStreamBatch.BatchL2Data = batchl2Data
-				if len(batchl2Data) > 0 {
-					log.Debugf("BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
-				} else {
-					log.Debugf("BatchL2Data is empty")
-				}
+		// Add last block (if any) to the current batch
+		a.currentStreamBatchRaw.Blocks = append(a.currentStreamBatchRaw.Blocks, a.currentStreamL2Block)
 
-				// Ger L1InfoRoot
-				sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+		// Save Current Batch
+		if a.currentStreamBatch.BatchNumber != 0 {
+			batchl2Data, err := state.EncodeBatchV2(&a.currentStreamBatchRaw)
+			if err != nil {
+				log.Errorf("Error encoding batch: %v", err)
+				return err
+			}
+			a.currentStreamBatch.BatchL2Data = batchl2Data
+			if len(batchl2Data) > 0 {
+				log.Debugf("BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
+			} else {
+				log.Debugf("BatchL2Data is empty")
+			}
+
+			// Ger L1InfoRoot
+			sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+			if err != nil {
+				log.Errorf("Error getting sequence: %v", err)
+				return err
+			}
+
+			for sequence == nil {
+				log.Debug("Waiting for sequence to be available")
+				time.Sleep(5 * time.Second) // nolint:gomnd
+				sequence, err = a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
 				if err != nil {
 					log.Errorf("Error getting sequence: %v", err)
 					return err
 				}
-
-				for sequence == nil {
-					log.Debug("Waiting for sequence to be available")
-					time.Sleep(5 * time.Second) // nolint:gomnd
-					sequence, err = a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
-					if err != nil {
-						log.Errorf("Error getting sequence: %v", err)
-						return err
-					}
-				}
-
-				a.currentStreamBatch.L1InfoRoot = sequence.L1InfoRoot
-				a.currentStreamBatch.Timestamp = sequence.Timestamp
-
-				// Calculate Acc Input Hash
-				oldBatch, _, err := a.state.GetBatch(ctx, a.currentStreamBatch.BatchNumber-1, nil)
-				if err != nil {
-					log.Errorf("Error getting batch %d: %v", a.currentStreamBatch.BatchNumber-1, err)
-					return err
-				}
-
-				accInputHash, err := calculateAccInputHash(oldBatch.AccInputHash, batchl2Data, a.currentStreamBatch.L1InfoRoot, uint64(a.currentStreamBatch.Timestamp.Unix()), a.currentStreamBatch.Coinbase, forcedBlockhashL1)
-				if err != nil {
-					log.Errorf("Error calculating acc input hash: %v", err)
-					return err
-				}
-
-				a.currentStreamBatch.AccInputHash = accInputHash
-
-				// Remove last entry
-				a.currentBatchStreamData = a.currentBatchStreamData[:len(a.currentBatchStreamData)-len(entry.Encode())]
-
-				err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentBatchStreamData, nil)
-				if err != nil {
-					log.Errorf("Error adding batch: %v", err)
-					return err
-				}
 			}
 
-			a.currentBatchStreamData = []byte{}
-			a.currentBatchStreamData = append(a.currentBatchStreamData, entry.Encode()...)
-			a.currentStreamBatch = state.Batch{
-				L1InfoTreeIndex: l2BlockStart.L1InfoTreeIndex,
-				BatchNumber:     l2BlockStart.BatchNumber,
-				Coinbase:        l2BlockStart.Coinbase,
-				GlobalExitRoot:  l2BlockStart.GlobalExitRoot,
+			a.currentStreamBatch.L1InfoRoot = sequence.L1InfoRoot
+			a.currentStreamBatch.Timestamp = sequence.Timestamp
+
+			// Calculate Acc Input Hash
+			oldBatch, _, err := a.state.GetBatch(ctx, a.currentStreamBatch.BatchNumber-1, nil)
+			if err != nil {
+				log.Errorf("Error getting batch %d: %v", a.currentStreamBatch.BatchNumber-1, err)
+				return err
 			}
 
-			a.currentStreamBatchRaw = state.BatchRawV2{
-				Blocks: make([]state.L2BlockRaw, 0),
+			accInputHash, err := calculateAccInputHash(oldBatch.AccInputHash, batchl2Data, a.currentStreamBatch.L1InfoRoot, uint64(a.currentStreamBatch.Timestamp.Unix()), a.currentStreamBatch.Coinbase, forcedBlockhashL1)
+			if err != nil {
+				log.Errorf("Error calculating acc input hash: %v", err)
+				return err
 			}
 
-			a.currentStreamL2Block = state.L2BlockRaw{}
+			a.currentStreamBatch.AccInputHash = accInputHash
+
+			err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentBatchStreamData, nil)
+			if err != nil {
+				log.Errorf("Error adding batch: %v", err)
+				return err
+			}
+		}
+
+		// Reset current batch data
+		a.currentBatchStreamData = []byte{}
+		a.currentStreamBatchRaw = state.BatchRawV2{
+			Blocks: make([]state.L2BlockRaw, 0),
+		}
+		a.currentStreamL2Block = state.L2BlockRaw{}
+
+	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_L2_BLOCK):
+		// Add previous block (if any) to the current batch
+		a.currentStreamBatchRaw.Blocks = append(a.currentStreamBatchRaw.Blocks, a.currentStreamL2Block)
+		// "Open" the new block
+		l2Block := &datastream.L2Block{}
+		err := json.Unmarshal(entry.Data, l2Block)
+		if err != nil {
+			log.Errorf("Error unmarshalling L2Block: %v", err)
+			return err
 		}
 
 		header := state.ChangeL2BlockHeader{
-			DeltaTimestamp:  l2BlockStart.DeltaTimestamp,
-			IndexL1InfoTree: l2BlockStart.L1InfoTreeIndex,
+			DeltaTimestamp:  l2Block.DeltaTimestamp,
+			IndexL1InfoTree: l2Block.L1InfotreeIndex,
 		}
 
 		a.currentStreamL2Block.ChangeL2BlockHeader = header
 		a.currentStreamL2Block.Transactions = make([]state.L2TxRaw, 0)
-		a.currentStreamL2Block.BlockNumber = l2BlockStart.L2BlockNumber
-		a.currentStreamBatch.L1InfoTreeIndex = l2BlockStart.L1InfoTreeIndex
-		a.currentStreamBatch.GlobalExitRoot = l2BlockStart.GlobalExitRoot
-	case state.EntryTypeL2Tx:
-		l2Tx := state.DSL2Transaction{}.Decode(entry.Data)
+		a.currentStreamL2Block.BlockNumber = l2Block.Number
+		a.currentStreamBatch.L1InfoTreeIndex = l2Block.L1InfotreeIndex
+		a.currentStreamBatch.Coinbase = common.BytesToAddress(l2Block.Coinbase)
+		a.currentStreamBatch.GlobalExitRoot = common.BytesToHash(l2Block.GlobalExitRoot)
+
+	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_TRANSACTION):
+		l2Tx := &datastream.Transaction{}
+		err := json.Unmarshal(entry.Data, l2Tx)
+		if err != nil {
+			log.Errorf("Error unmarshalling L2Tx: %v", err)
+			return err
+		}
 		// New Tx raw
 		tx, err := state.DecodeTx(common.Bytes2Hex(l2Tx.Encoded))
 		if err != nil {
@@ -261,15 +269,11 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 		}
 
 		l2TxRaw := state.L2TxRaw{
-			EfficiencyPercentage: l2Tx.EffectiveGasPricePercentage,
+			EfficiencyPercentage: uint8(l2Tx.EffectiveGasPricePercentage),
 			TxAlreadyEncoded:     false,
 			Tx:                   *tx,
 		}
 		a.currentStreamL2Block.Transactions = append(a.currentStreamL2Block.Transactions, l2TxRaw)
-	case state.EntryTypeL2BlockEnd:
-		l2BlockEnd := state.DSL2BlockEnd{}.Decode(entry.Data)
-		a.currentStreamBatchRaw.Blocks = append(a.currentStreamBatchRaw.Blocks, a.currentStreamL2Block)
-		a.currentStreamBatch.StateRoot = l2BlockEnd.StateRoot
 	}
 
 	return nil
@@ -358,12 +362,17 @@ func (a *Aggregator) Start(ctx context.Context) error {
 		log.Fatalf("failed to start stream client, error: %v", err)
 	}
 
-	bookMark := state.DSBookMark{
-		Type:  state.BookMarkTypeBatch,
+	bookMark := &datastream.BookMark{
+		Type:  datastream.BookmarkType_BOOKMARK_TYPE_BATCH,
 		Value: lastVerifiedBatchNumber + 1,
 	}
 
-	err = a.streamClient.ExecCommandStartBookmark(bookMark.Encode())
+	marshalledBookMark, err := proto.Marshal(bookMark)
+	if err != nil {
+		log.Fatalf("failed to marshal bookmark: %v", err)
+	}
+
+	err = a.streamClient.ExecCommandStartBookmark(marshalledBookMark)
 	if err != nil {
 		log.Fatalf("failed to connect to data stream: %v", err)
 	}
@@ -1358,27 +1367,6 @@ func getWitness(batchNumber uint64, URL string) ([]byte, error) {
 		witnessString = "0" + witnessString
 	}
 	bytes := common.Hex2Bytes(witnessString)
-
-	return bytes, nil
-}
-
-func getLER(blockNumber uint64, URL string, LERContract string) (common.Hash, error) {
-	var witness string
-	response, err := rpclient.JSONRPCCall(URL, "eth_getStorageAt", nil, "1", LERContract, "0x01", blockNumber)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	err = json.Unmarshal(response.Result, &witness)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	lerString := strings.TrimLeft(witness, "0x")
-	if len(lerString)%2 != 0 {
-		lerString = "0" + lerString
-	}
-	bytes := common.HexToHash(lerString)
 
 	return bytes, nil
 }
