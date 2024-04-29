@@ -155,7 +155,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 	switch entry.Type {
 	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_BATCH):
 		batch := &datastream.Batch{}
-		err := json.Unmarshal(entry.Data, batch)
+		err := proto.Unmarshal(entry.Data, batch)
 		if err != nil {
 			log.Errorf("Error unmarshalling batch: %v", err)
 			return err
@@ -236,7 +236,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 		a.currentStreamBatchRaw.Blocks = append(a.currentStreamBatchRaw.Blocks, a.currentStreamL2Block)
 		// "Open" the new block
 		l2Block := &datastream.L2Block{}
-		err := json.Unmarshal(entry.Data, l2Block)
+		err := proto.Unmarshal(entry.Data, l2Block)
 		if err != nil {
 			log.Errorf("Error unmarshalling L2Block: %v", err)
 			return err
@@ -256,7 +256,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_TRANSACTION):
 		l2Tx := &datastream.Transaction{}
-		err := json.Unmarshal(entry.Data, l2Tx)
+		err := proto.Unmarshal(entry.Data, l2Tx)
 		if err != nil {
 			log.Errorf("Error unmarshalling L2Tx: %v", err)
 			return err
