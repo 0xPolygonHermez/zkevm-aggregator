@@ -5,7 +5,7 @@ go 1.21.3
 require (
 	github.com/0xPolygonHermez/zkevm-data-streamer v0.2.2
 	github.com/0xPolygonHermez/zkevm-ethtx-manager v0.1.0
-	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.2.6
+	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.2.7
 	github.com/ethereum/go-ethereum v1.13.15
 	github.com/gobuffalo/packr/v2 v2.8.3
 	github.com/hermeznetwork/tracerr v0.3.2
@@ -19,7 +19,7 @@ require (
 	github.com/rubenv/sql-migrate v1.6.1
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.9.0
-	github.com/urfave/cli/v2 v2.27.1
+	github.com/urfave/cli/v2 v2.27.2
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.22.0
 	google.golang.org/grpc v1.63.2
@@ -44,7 +44,7 @@ require (
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
 	github.com/consensys/gnark-crypto v0.12.1 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233 // indirect
 	github.com/crate-crypto/go-kzg-4844 v0.7.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -108,7 +108,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
-	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
+	github.com/xrash/smetrics v0.0.0-20240312152122-5f08fbb34913 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
 	golang.org/x/mod v0.14.0 // indirect
