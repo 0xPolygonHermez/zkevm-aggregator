@@ -153,8 +153,8 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 	a.currentBatchStreamData = append(a.currentBatchStreamData, entry.Encode()...)
 
 	switch entry.Type {
-	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_BATCH):
-		batch := &datastream.Batch{}
+	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_BATCH_END):
+		batch := &datastream.BatchEnd{}
 		err := proto.Unmarshal(entry.Data, batch)
 		if err != nil {
 			log.Errorf("Error unmarshalling batch: %v", err)
