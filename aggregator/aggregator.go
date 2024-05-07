@@ -514,7 +514,7 @@ func (a *Aggregator) sendFinalProof() {
 				continue
 			}
 
-			monitoredTxID, err := a.ethTxManager.Add(ctx, to, nil, big.NewInt(0), data, nil)
+			monitoredTxID, err := a.ethTxManager.Add(ctx, to, nil, big.NewInt(0), data, 0, nil)
 			if err != nil {
 				log.Errorf("Error Adding TX to ethTxManager: %v", err)
 				mTxLogger := ethtxmanager.CreateLogger(monitoredTxID, sender, to)

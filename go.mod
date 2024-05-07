@@ -4,7 +4,7 @@ go 1.21.3
 
 require (
 	github.com/0xPolygonHermez/zkevm-data-streamer v0.2.2
-	github.com/0xPolygonHermez/zkevm-ethtx-manager v0.1.0
+	github.com/0xPolygonHermez/zkevm-ethtx-manager v0.1.3
 	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.2.7
 	github.com/ethereum/go-ethereum v1.13.15
 	github.com/gobuffalo/packr/v2 v2.8.3

@@ -27,7 +27,6 @@ LERContract = "0xa40D5f56745a118D0906a34E69aeC8C0Db1cB8fA"
 		Outputs = ["stderr"]
 	[Aggregator.StreamClient]
 		Server = "zkevm-erigon-seq:6900"
-		# Server = "zkevm-rpc2:6900"
 	[Aggregator.EthTxManager]
 		FrequencyToMonitorTxs = "1s"
 		WaitTxToBeMined = "2m"
@@ -40,7 +39,8 @@ LERContract = "0xa40D5f56745a118D0906a34E69aeC8C0Db1cB8fA"
 		ForcedGas = 0
 		GasPriceMarginFactor = 1
 		MaxGasPriceLimit = 0
-		PersistenceFilename = "/ethtxmanager_aggregator.json"
+		PersistenceFilename = ""
+		ReadPendingL1Txs = false
 			[Aggregator.EthTxManager.Etherman]
 				URL = ""
 				L1ChainID = 11155111
