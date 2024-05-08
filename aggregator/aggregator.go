@@ -1301,7 +1301,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 	}*/
 
 	// Get Witness
-	witness, err := getWitness(batchToVerify.BatchNumber, a.cfg.WitnessURL)
+	witness, err := getWitness(batchToVerify.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
 	if err != nil {
 		return nil, err
 	}
@@ -1375,11 +1375,21 @@ func calculateAccInputHash(oldAccInputHash common.Hash, batchData []byte, l1Info
 	return common.BytesToHash(keccak256.Hash(v1, v2, v3, v4, v5, v6)), nil
 }
 
-func getWitness(batchNumber uint64, URL string) ([]byte, error) {
+func getWitness(batchNumber uint64, URL string, fullWitness bool) ([]byte, error) {
 	var witness string
-	response, err := rpclient.JSONRPCCall(URL, "zkevm_getBatchWitness", nil, "batch-1", batchNumber)
-	if err != nil {
-		return nil, err
+	var response rpclient.Response
+	var err error
+
+	if fullWitness {
+		response, err = rpclient.JSONRPCCall(URL, "zkevm_getBatchWitness", nil, "1", batchNumber, "full")
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		response, err = rpclient.JSONRPCCall(URL, "zkevm_getBatchWitness", nil, "batch-1", batchNumber)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = json.Unmarshal(response.Result, &witness)

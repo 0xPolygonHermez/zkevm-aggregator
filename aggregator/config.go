@@ -99,6 +99,9 @@ type Config struct {
 	// UseL1BatchData is a flag to enable the use of L1 batch data in the aggregator
 	UseL1BatchData bool `mapstructure:"UseL1BatchData"`
 
+	// UseFullWitness is a flag to enable the use of full witness in the aggregator
+	UseFullWitness bool `mapstructure:"UseFullWitness"`
+
 	// DB is the database configuration
 	DB db.Config `mapstructure:"DB"`
 
