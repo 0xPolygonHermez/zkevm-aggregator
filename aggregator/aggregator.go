@@ -230,7 +230,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 			a.currentStreamBatch.AccInputHash = accInputHash
 
-			err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentBatchStreamData, nil)
+			err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentStreamBatch.BatchL2Data, nil)
 			if err != nil {
 				log.Errorf("Error adding batch: %v", err)
 				return err
