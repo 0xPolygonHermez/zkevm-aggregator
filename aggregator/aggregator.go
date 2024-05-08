@@ -173,11 +173,24 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					log.Errorf("Error encoding batch: %v", err)
 					return err
 				}
-				a.currentStreamBatch.BatchL2Data = batchl2Data
-				if len(batchl2Data) > 0 {
-					log.Debugf("BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
+
+				// Get batchl2Data from L1
+				virtualBatch, err := a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+				if err != nil {
+					log.Errorf("Error getting virtual batch: %v", err)
+					return err
+				}
+
+				if a.cfg.UseL1BatchData {
+					a.currentStreamBatch.BatchL2Data = virtualBatch.BatchL2Data
 				} else {
-					log.Debugf("BatchL2Data is empty")
+					a.currentStreamBatch.BatchL2Data = batchl2Data
+				}
+
+				if common.Bytes2Hex(batchl2Data) != common.Bytes2Hex(virtualBatch.BatchL2Data) {
+					log.Warnf("BatchL2Data from L1 and data stream are different")
+					log.Debugf("DataStream BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
+					log.Debugf("L1 BatchL2Data:%v", common.Bytes2Hex(virtualBatch.BatchL2Data))
 				}
 
 				// Ger L1InfoRoot
@@ -1208,7 +1221,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchStreamData []byt
 			return nil, err
 		}
 
-		leaves, err := a.l1Syncr.GetLeafsByL1InfoRoot(ctx, batchToVerify.L1InfoRoot, nil)
+		leaves, err := a.l1Syncr.GetLeafsByL1InfoRoot(ctx, batchToVerify.L1InfoRoot)
 		if err != nil {
 			return nil, err
 		}
