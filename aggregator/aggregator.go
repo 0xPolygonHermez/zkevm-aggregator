@@ -977,7 +977,7 @@ func (a *Aggregator) getVerifiedBatchAccInputHash(ctx context.Context, batchNumb
 	return &accInputHash, nil
 }
 
-func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverInterface) ([]byte, *state.Batch, *state.Proof, error) {
+func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverInterface) (*state.Batch, *state.Proof, error) {
 	proverID := prover.ID()
 	proverName := prover.Name()
 
@@ -993,7 +993,7 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 	// Get last virtual batch number from L1
 	lastVerifiedBatchNumber, err := a.etherman.GetLatestVerifiedBatchNum()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	proofExists := true
@@ -1005,7 +1005,7 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 		proofExists, err = a.state.CheckProofExistsForBatch(ctx, batchNumberToVerify, nil)
 		if err != nil {
 			log.Infof("Error checking proof exists for batch %d", batchNumberToVerify)
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -1013,12 +1013,12 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 	sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, batchNumberToVerify)
 	if err != nil {
 		log.Infof("No sequence found for batch %d", batchNumberToVerify)
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	// Not found, so it it not possible to verify the batch yet
 	if sequence == nil {
-		return nil, nil, nil, state.ErrNotFound
+		return nil, nil, state.ErrNotFound
 	}
 
 	stateSequence := state.Sequence{
@@ -1029,12 +1029,12 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 	err = a.state.AddSequence(ctx, stateSequence, nil)
 	if err != nil {
 		log.Infof("Error storing sequence for batch %d", batchNumberToVerify)
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
-	batch, datastream, err := a.state.GetBatch(ctx, batchNumberToVerify, nil)
+	batch, _, err := a.state.GetBatch(ctx, batchNumberToVerify, nil)
 	if err != nil {
-		return nil, batch, nil, err
+		return batch, nil, err
 	}
 
 	// All the data required to generate a proof is ready
@@ -1047,12 +1047,12 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 	isProfitable, err := a.profitabilityChecker.IsProfitable(ctx, big.NewInt(0))
 	if err != nil {
 		log.Errorf("Failed to check aggregator profitability, err: %v", err)
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	if !isProfitable {
 		log.Infof("Batch is not profitable, pol collateral %d", big.NewInt(0))
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	now := time.Now().Round(time.Microsecond)
@@ -1068,10 +1068,10 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 	err = a.state.AddGeneratedProof(ctx, proof, nil)
 	if err != nil {
 		log.Errorf("Failed to add batch proof, err: %v", err)
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
-	return datastream, batch, proof, nil
+	return batch, proof, nil
 }
 
 func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInterface) (bool, error) {
@@ -1082,7 +1082,7 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 	)
 	log.Debug("tryGenerateBatchProof start")
 
-	batchDataToProve, batchToProve, proof, err0 := a.getAndLockBatchToProve(ctx, prover)
+	batchToProve, proof, err0 := a.getAndLockBatchToProve(ctx, prover)
 	if errors.Is(err0, state.ErrNotFound) {
 		// nothing to proof, swallow the error
 		log.Debug("Nothing to generate proof")
@@ -1111,7 +1111,7 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 	}()
 
 	log.Infof("Sending zki + batch to the prover, batchNumber [%d]", batchToProve.BatchNumber)
-	inputProver, err := a.buildInputProver(ctx, batchDataToProve, batchToProve)
+	inputProver, err := a.buildInputProver(ctx, batchToProve)
 	if err != nil {
 		err = fmt.Errorf("failed to build input prover, %w", err)
 		log.Error(FirstToUpper(err.Error()))
@@ -1198,7 +1198,7 @@ func (a *Aggregator) resetVerifyProofTime() {
 	a.timeSendFinalProof = time.Now().Add(a.cfg.VerifyProofInterval.Duration)
 }
 
-func (a *Aggregator) buildInputProver(ctx context.Context, batchStreamData []byte, batchToVerify *state.Batch) (*prover.StatelessInputProver, error) {
+func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.Batch) (*prover.StatelessInputProver, error) {
 	isForcedBatch := false
 	batchRawData := &state.BatchRawV2{}
 	var err error
@@ -1302,7 +1302,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchStreamData []byt
 	inputProver := &prover.StatelessInputProver{
 		PublicInputs: &prover.StatelessPublicInputs{
 			Witness:           witness,
-			DataStream:        batchStreamData,
+			DataStream:        batchToVerify.BatchL2Data,
 			OldAccInputHash:   oldBatch.AccInputHash.Bytes(),
 			L1InfoRoot:        batchToVerify.L1InfoRoot.Bytes(),
 			TimestampLimit:    uint64(batchToVerify.Timestamp.Unix()),
