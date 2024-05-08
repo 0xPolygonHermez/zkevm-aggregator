@@ -220,7 +220,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					return err
 				}
 
-				accInputHash, err := calculateAccInputHash(oldBatch.AccInputHash, batchl2Data, a.currentStreamBatch.L1InfoRoot, uint64(a.currentStreamBatch.Timestamp.Unix()), a.currentStreamBatch.Coinbase, forcedBlockhashL1)
+				accInputHash, err := calculateAccInputHash(oldBatch.AccInputHash, a.currentStreamBatch.BatchL2Data, a.currentStreamBatch.L1InfoRoot, uint64(a.currentStreamBatch.Timestamp.Unix()), a.currentStreamBatch.Coinbase, forcedBlockhashL1)
 				if err != nil {
 					log.Errorf("Error calculating acc input hash: %v", err)
 					return err
@@ -231,7 +231,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 				// Remove last entry
 				a.currentBatchStreamData = a.currentBatchStreamData[:len(a.currentBatchStreamData)-len(entry.Encode())]
 
-				err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentStreamBatch.BatchL2Data, nil)
+				err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentBatchStreamData, nil)
 				if err != nil {
 					log.Errorf("Error adding batch: %v", err)
 					return err
