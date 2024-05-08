@@ -7,7 +7,7 @@ services:
   zkevm-prover:
     container_name: zkevm-prover
     restart: unless-stopped
-    image: hermeznetwork/zkevm-prover:v6.0.0 
+    image: hermeznetwork/zkevm-prover:v6.0.3-RC9
     volumes:
       - ./config/test.prover.config.json:/usr/src/app/config.json
       - ~/stateless-aggregator/prover/config:/app/config

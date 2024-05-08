@@ -183,12 +183,13 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 				if a.cfg.UseL1BatchData {
 					a.currentStreamBatch.BatchL2Data = virtualBatch.BatchL2Data
+					a.currentStreamBatch.ForkID = virtualBatch.ForkID
 				} else {
 					a.currentStreamBatch.BatchL2Data = batchl2Data
 				}
 
 				if common.Bytes2Hex(batchl2Data) != common.Bytes2Hex(virtualBatch.BatchL2Data) {
-					log.Warnf("BatchL2Data from L1 and data stream are different")
+					log.Warnf("BatchL2Data from L1 and data stream are different for batch %d", a.currentStreamBatch.BatchNumber)
 					log.Debugf("DataStream BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
 					log.Debugf("L1 BatchL2Data:%v", common.Bytes2Hex(virtualBatch.BatchL2Data))
 				}
@@ -264,6 +265,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 		a.currentStreamL2Block.BlockNumber = l2BlockStart.L2BlockNumber
 		a.currentStreamBatch.L1InfoTreeIndex = l2BlockStart.L1InfoTreeIndex
 		a.currentStreamBatch.GlobalExitRoot = l2BlockStart.GlobalExitRoot
+		a.currentStreamBatch.ForkID = uint64(l2BlockStart.ForkID)
 	case state.EntryTypeL2Tx:
 		l2Tx := state.DSL2Transaction{}.Decode(entry.Data)
 		// New Tx raw
@@ -1302,8 +1304,11 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 	inputProver := &prover.StatelessInputProver{
 		PublicInputs: &prover.StatelessPublicInputs{
 			Witness:           witness,
-			DataStream:        batchToVerify.BatchL2Data,
 			OldAccInputHash:   oldBatch.AccInputHash.Bytes(),
+			OldBatchNum:       batchToVerify.BatchNumber - 1,
+			ChainId:           a.cfg.ChainID,
+			ForkId:            batchToVerify.ForkID,
+			BatchL2Data:       batchToVerify.BatchL2Data,
 			L1InfoRoot:        batchToVerify.L1InfoRoot.Bytes(),
 			TimestampLimit:    uint64(batchToVerify.Timestamp.Unix()),
 			SequencerAddr:     batchToVerify.Coinbase.String(),
@@ -1398,7 +1403,7 @@ func getLER(blockNumber uint64, URL string, LERContract string) (common.Hash, er
 
 func printInputProver(inputProver *prover.StatelessInputProver) {
 	log.Debugf("Witness length: %v", len(inputProver.PublicInputs.Witness))
-	log.Debugf("DataStream length: %v", len(inputProver.PublicInputs.DataStream))
+	log.Debugf("BatchL2Data length: %v", len(inputProver.PublicInputs.BatchL2Data))
 	// log.Debugf("Full DataStream: %v", common.Bytes2Hex(inputProver.PublicInputs.DataStream))
 	log.Debugf("OldAccInputHash: %v", common.BytesToHash(inputProver.PublicInputs.OldAccInputHash))
 	log.Debugf("L1InfoRoot: %v", common.BytesToHash(inputProver.PublicInputs.L1InfoRoot))

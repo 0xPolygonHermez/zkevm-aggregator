@@ -38,6 +38,7 @@ type Batch struct {
 	Transactions   []types.Transaction
 	GlobalExitRoot common.Hash
 	ForcedBatchNum *uint64
+	ForkID         uint64
 }
 
 // Sequence represents the sequence interval
