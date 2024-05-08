@@ -231,7 +231,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 				// Remove last entry
 				a.currentBatchStreamData = a.currentBatchStreamData[:len(a.currentBatchStreamData)-len(entry.Encode())]
 
-				err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentBatchStreamData, nil)
+				err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentStreamBatch.BatchL2Data, nil)
 				if err != nil {
 					log.Errorf("Error adding batch: %v", err)
 					return err
