@@ -153,6 +153,24 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 	a.currentBatchStreamData = append(a.currentBatchStreamData, entry.Encode()...)
 
 	switch entry.Type {
+	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_BATCH_START):
+		batch := &datastream.BatchStart{}
+		err := proto.Unmarshal(entry.Data, batch)
+		if err != nil {
+			log.Errorf("Error unmarshalling batch: %v", err)
+			return err
+		}
+
+		// Reset current batch data
+		a.currentBatchStreamData = []byte{}
+		a.currentStreamBatchRaw = state.BatchRawV2{
+			Blocks: make([]state.L2BlockRaw, 0),
+		}
+		a.currentStreamL2Block = state.L2BlockRaw{}
+
+		a.currentStreamBatch.BatchNumber = batch.Number
+		a.currentStreamBatch.ChainID = batch.ChainId
+		a.currentStreamBatch.ForkID = batch.ForkId
 	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_BATCH_END):
 		batch := &datastream.BatchEnd{}
 		err := proto.Unmarshal(entry.Data, batch)
@@ -161,7 +179,6 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 			return err
 		}
 
-		a.currentStreamBatch.BatchNumber = batch.Number
 		a.currentStreamBatch.LocalExitRoot = common.BytesToHash(batch.LocalExitRoot)
 		a.currentStreamBatch.StateRoot = common.BytesToHash(batch.StateRoot)
 
@@ -236,14 +253,6 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 				return err
 			}
 		}
-
-		// Reset current batch data
-		a.currentBatchStreamData = []byte{}
-		a.currentStreamBatchRaw = state.BatchRawV2{
-			Blocks: make([]state.L2BlockRaw, 0),
-		}
-		a.currentStreamL2Block = state.L2BlockRaw{}
-
 	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_L2_BLOCK):
 		// Add previous block (if any) to the current batch
 		a.currentStreamBatchRaw.Blocks = append(a.currentStreamBatchRaw.Blocks, a.currentStreamL2Block)
@@ -1311,8 +1320,11 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 	inputProver := &prover.StatelessInputProver{
 		PublicInputs: &prover.StatelessPublicInputs{
 			Witness:           witness,
-			DataStream:        batchToVerify.BatchL2Data,
 			OldAccInputHash:   oldBatch.AccInputHash.Bytes(),
+			OldBatchNum:       batchToVerify.BatchNumber - 1,
+			ChainId:           batchToVerify.ChainID,
+			ForkId:            batchToVerify.ForkID,
+			BatchL2Data:       batchToVerify.BatchL2Data,
 			L1InfoRoot:        batchToVerify.L1InfoRoot.Bytes(),
 			TimestampLimit:    uint64(batchToVerify.Timestamp.Unix()),
 			SequencerAddr:     batchToVerify.Coinbase.String(),
@@ -1386,7 +1398,7 @@ func getWitness(batchNumber uint64, URL string) ([]byte, error) {
 
 func printInputProver(inputProver *prover.StatelessInputProver) {
 	log.Debugf("Witness length: %v", len(inputProver.PublicInputs.Witness))
-	log.Debugf("DataStream length: %v", len(inputProver.PublicInputs.DataStream))
+	log.Debugf("BatchL2Data length: %v", len(inputProver.PublicInputs.BatchL2Data))
 	// log.Debugf("Full DataStream: %v", common.Bytes2Hex(inputProver.PublicInputs.DataStream))
 	log.Debugf("OldAccInputHash: %v", common.BytesToHash(inputProver.PublicInputs.OldAccInputHash))
 	log.Debugf("L1InfoRoot: %v", common.BytesToHash(inputProver.PublicInputs.L1InfoRoot))
