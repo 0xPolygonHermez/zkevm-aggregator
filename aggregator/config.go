@@ -96,6 +96,9 @@ type Config struct {
 	// LERContract is the contract address to get the LER from
 	LERContract string `mapstructure:"LERContract"`
 
+	// UseL1BatchData is a flag to enable the use of L1 batch data in the aggregator
+	UseL1BatchData bool `mapstructure:"UseL1BatchData"`
+
 	// DB is the database configuration
 	DB db.Config `mapstructure:"DB"`
 
