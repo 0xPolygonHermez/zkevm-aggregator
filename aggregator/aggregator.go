@@ -176,8 +176,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 				}
 
 				// Get batchl2Data from L1
-				virtualBatch, _ := a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
-
+				virtualBatch, err := a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
 				if err != nil && err != entities.ErrNotFound {
 					log.Errorf("Error getting virtual batch: %v", err)
 					return err
