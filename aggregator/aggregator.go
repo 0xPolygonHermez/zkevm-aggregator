@@ -24,6 +24,7 @@ import (
 	streamlog "github.com/0xPolygonHermez/zkevm-data-streamer/log"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
 	ethtxlog "github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/state/entities"
 	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/synchronizer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/iden3/go-iden3-crypto/keccak256"
@@ -176,23 +177,21 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 				// Get batchl2Data from L1
 				virtualBatch, _ := a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
-				/*
-					if err != nil && err.Error() == "not found" {
-						log.Errorf("Error getting virtual batch: %v", err)
-						return err
-					}
-				*/
+
+				if err != nil && err != entities.ErrNotFound {
+					log.Errorf("Error getting virtual batch: %v", err)
+					return err
+				}
 
 				for virtualBatch == nil {
 					log.Debug("Waiting for virtual batch to be available")
-					time.Sleep(5 * time.Second) // nolint:gomnd
-					virtualBatch, _ = a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
-					/*
-						if err != nil && err != state.ErrNotFound {
-							log.Errorf("Error getting virtual batch: %v", err)
-							return err
-						}
-					*/
+					time.Sleep(a.cfg.RetryTime.Duration)
+					virtualBatch, err = a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+
+					if err != nil && err != entities.ErrNotFound {
+						log.Errorf("Error getting virtual batch: %v", err)
+						return err
+					}
 				}
 
 				if a.cfg.UseL1BatchData {
@@ -217,7 +216,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 				for sequence == nil {
 					log.Debug("Waiting for sequence to be available")
-					time.Sleep(5 * time.Second) // nolint:gomnd
+					time.Sleep(a.cfg.RetryTime.Duration)
 					sequence, err = a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
 					if err != nil {
 						log.Errorf("Error getting sequence: %v", err)
@@ -1305,8 +1304,8 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 	}
 
 	// Check Witness length
-	if len(witness) > 100*1204 { // nolint: gomnd
-		log.Warnf("Witness length is %d bytes. Check full witness configuration on %s", len(witness), a.cfg.WitnessURL)
+	if len(witness) > 100*1204 && !a.cfg.UseFullWitness { // nolint: gomnd
+		log.Warnf("Witness length is %d bytes. Check full witness on %s", len(witness), a.cfg.WitnessURL)
 	}
 
 	// Get Old Acc Input Hash
