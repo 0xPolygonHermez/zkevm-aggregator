@@ -182,7 +182,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					return err
 				}
 
-				for virtualBatch == nil {
+				for err == entities.ErrNotFound {
 					log.Debug("Waiting for virtual batch to be available")
 					time.Sleep(a.cfg.RetryTime.Duration)
 					virtualBatch, err = a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
