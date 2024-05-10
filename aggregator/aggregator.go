@@ -1041,13 +1041,13 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 
 	// Check if the batch has been sequenced
 	sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, batchNumberToVerify)
-	if err != nil {
-		log.Infof("No sequence found for batch %d", batchNumberToVerify)
+	if err != nil && !errors.Is(err, entities.ErrNotFound) {
 		return nil, nil, err
 	}
 
 	// Not found, so it it not possible to verify the batch yet
-	if sequence == nil {
+	if sequence == nil || errors.Is(err, entities.ErrNotFound) {
+		log.Infof("No sequence found for batch %d", batchNumberToVerify)
 		return nil, nil, state.ErrNotFound
 	}
 
