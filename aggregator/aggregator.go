@@ -247,6 +247,18 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					return err
 				}
 
+				// Injected Batch
+				if a.currentStreamBatch.BatchNumber == 1 {
+					l1Block, err := a.l1Syncr.GetL1BlockByNumber(ctx, virtualBatch.BlockNumber)
+					if err != nil {
+						log.Errorf("Error getting L1 block: %v", err)
+						return err
+					}
+
+					forcedBlockhashL1 = l1Block.ParentHash
+					a.currentStreamBatch.L1InfoRoot = a.currentStreamBatch.GlobalExitRoot
+				}
+
 				accInputHash, err := calculateAccInputHash(oldBatch.AccInputHash, a.currentStreamBatch.BatchL2Data, a.currentStreamBatch.L1InfoRoot, uint64(a.currentStreamBatch.Timestamp.Unix()), a.currentStreamBatch.Coinbase, forcedBlockhashL1)
 				if err != nil {
 					log.Errorf("Error calculating acc input hash: %v", err)
@@ -1308,7 +1320,6 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 	} else {
 		// Initial batch must be handled differently
 		if batchToVerify.BatchNumber == 1 {
-			// forcedBlockhashL1, err = a.state.GetVirtualBatchParentHash(ctx, batchToVerify.BatchNumber, nil)
 			virtualBatch, err := a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, batchToVerify.BatchNumber)
 			if err != nil {
 				return nil, err
