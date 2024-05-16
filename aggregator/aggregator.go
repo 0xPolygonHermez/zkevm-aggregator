@@ -151,163 +151,170 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 	ctx := context.Background()
 	forcedBlockhashL1 := common.Hash{}
 
-	a.currentBatchStreamData = append(a.currentBatchStreamData, entry.Encode()...)
+	if entry.Type != datastreamer.EntryType(datastreamer.EtBookmark) {
+		a.currentBatchStreamData = append(a.currentBatchStreamData, entry.Encode()...)
 
-	switch entry.Type {
-	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_BATCH_START):
-		batch := &datastream.BatchStart{}
-		err := proto.Unmarshal(entry.Data, batch)
-		if err != nil {
-			log.Errorf("Error unmarshalling batch: %v", err)
-			return err
-		}
-
-		// Reset current batch data
-		a.currentBatchStreamData = []byte{}
-		a.currentStreamBatchRaw = state.BatchRawV2{
-			Blocks: make([]state.L2BlockRaw, 0),
-		}
-		a.currentStreamL2Block = state.L2BlockRaw{}
-
-		a.currentStreamBatch.BatchNumber = batch.Number
-		a.currentStreamBatch.ChainID = batch.ChainId
-		a.currentStreamBatch.ForkID = batch.ForkId
-	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_BATCH_END):
-		batch := &datastream.BatchEnd{}
-		err := proto.Unmarshal(entry.Data, batch)
-		if err != nil {
-			log.Errorf("Error unmarshalling batch: %v", err)
-			return err
-		}
-
-		a.currentStreamBatch.LocalExitRoot = common.BytesToHash(batch.LocalExitRoot)
-		a.currentStreamBatch.StateRoot = common.BytesToHash(batch.StateRoot)
-
-		// Add last block (if any) to the current batch
-		a.currentStreamBatchRaw.Blocks = append(a.currentStreamBatchRaw.Blocks, a.currentStreamL2Block)
-
-		// Save Current Batch
-		if a.currentStreamBatch.BatchNumber != 0 {
-			batchl2Data, err := state.EncodeBatchV2(&a.currentStreamBatchRaw)
+		switch entry.Type {
+		case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_BATCH_START):
+			batch := &datastream.BatchStart{}
+			err := proto.Unmarshal(entry.Data, batch)
 			if err != nil {
-				log.Errorf("Error encoding batch: %v", err)
+				log.Errorf("Error unmarshalling batch: %v", err)
 				return err
 			}
 
-			// Get batchl2Data from L1
-			virtualBatch, err := a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
-			if err != nil && !errors.Is(err, entities.ErrNotFound) {
-				log.Errorf("Error getting virtual batch: %v", err)
+			a.currentStreamBatch.BatchNumber = batch.Number
+			a.currentStreamBatch.ChainID = batch.ChainId
+			a.currentStreamBatch.ForkID = batch.ForkId
+		case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_BATCH_END):
+			batch := &datastream.BatchEnd{}
+			err := proto.Unmarshal(entry.Data, batch)
+			if err != nil {
+				log.Errorf("Error unmarshalling batch: %v", err)
 				return err
 			}
 
-			for errors.Is(err, entities.ErrNotFound) {
-				log.Debug("Waiting for virtual batch to be available")
-				time.Sleep(a.cfg.RetryTime.Duration)
-				virtualBatch, err = a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+			a.currentStreamBatch.LocalExitRoot = common.BytesToHash(batch.LocalExitRoot)
+			a.currentStreamBatch.StateRoot = common.BytesToHash(batch.StateRoot)
 
+			// Add last block (if any) to the current batch
+			if a.currentStreamL2Block.BlockNumber != 0 {
+				a.currentStreamBatchRaw.Blocks = append(a.currentStreamBatchRaw.Blocks, a.currentStreamL2Block)
+			}
+
+			// Save Current Batch
+			if a.currentStreamBatch.BatchNumber != 0 {
+				batchl2Data, err := state.EncodeBatchV2(&a.currentStreamBatchRaw)
+				if err != nil {
+					log.Errorf("Error encoding batch: %v", err)
+					return err
+				}
+
+				// Get batchl2Data from L1
+				virtualBatch, err := a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
 				if err != nil && !errors.Is(err, entities.ErrNotFound) {
 					log.Errorf("Error getting virtual batch: %v", err)
 					return err
 				}
-			}
 
-			if a.cfg.UseL1BatchData {
-				a.currentStreamBatch.BatchL2Data = virtualBatch.BatchL2Data
-			} else {
-				a.currentStreamBatch.BatchL2Data = batchl2Data
-			}
+				for errors.Is(err, entities.ErrNotFound) {
+					log.Debug("Waiting for virtual batch to be available")
+					time.Sleep(a.cfg.RetryTime.Duration)
+					virtualBatch, err = a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
 
-			if common.Bytes2Hex(batchl2Data) != common.Bytes2Hex(virtualBatch.BatchL2Data) {
-				log.Warnf("BatchL2Data from L1 and data stream are different")
-				log.Debugf("DataStream BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
-				log.Debugf("L1 BatchL2Data:%v", common.Bytes2Hex(virtualBatch.BatchL2Data))
-			}
+					if err != nil && !errors.Is(err, entities.ErrNotFound) {
+						log.Errorf("Error getting virtual batch: %v", err)
+						return err
+					}
+				}
 
-			// Ger L1InfoRoot
-			sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
-			if err != nil && !errors.Is(err, entities.ErrNotFound) {
-				log.Errorf("Error getting sequence: %v", err)
-				return err
-			}
+				if a.cfg.UseL1BatchData {
+					a.currentStreamBatch.BatchL2Data = virtualBatch.BatchL2Data
+				} else {
+					a.currentStreamBatch.BatchL2Data = batchl2Data
+				}
 
-			for errors.Is(err, entities.ErrNotFound) {
-				log.Debug("Waiting for sequence to be available")
-				time.Sleep(a.cfg.RetryTime.Duration)
-				sequence, err = a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
-				if err != nil && !errors.Is(err, entities.ErrNotFound) {
+				if common.Bytes2Hex(batchl2Data) != common.Bytes2Hex(virtualBatch.BatchL2Data) {
+					log.Warnf("BatchL2Data from L1 and data stream are different for batch %d", a.currentStreamBatch.BatchNumber)
+					log.Debugf("DataStream BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
+					log.Debugf("L1 BatchL2Data:%v", common.Bytes2Hex(virtualBatch.BatchL2Data))
+				}
+
+				// Ger L1InfoRoot
+				sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+				if err != nil {
 					log.Errorf("Error getting sequence: %v", err)
+					return err
+				}
+
+				for sequence == nil {
+					log.Debug("Waiting for sequence to be available")
+					time.Sleep(a.cfg.RetryTime.Duration)
+					sequence, err = a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+					if err != nil {
+						log.Errorf("Error getting sequence: %v", err)
+						return err
+					}
+				}
+
+				a.currentStreamBatch.L1InfoRoot = sequence.L1InfoRoot
+				a.currentStreamBatch.Timestamp = sequence.Timestamp
+
+				// Calculate Acc Input Hash
+				oldBatch, _, err := a.state.GetBatch(ctx, a.currentStreamBatch.BatchNumber-1, nil)
+				if err != nil {
+					log.Errorf("Error getting batch %d: %v", a.currentStreamBatch.BatchNumber-1, err)
+					return err
+				}
+
+				accInputHash, err := calculateAccInputHash(oldBatch.AccInputHash, a.currentStreamBatch.BatchL2Data, a.currentStreamBatch.L1InfoRoot, uint64(a.currentStreamBatch.Timestamp.Unix()), a.currentStreamBatch.Coinbase, forcedBlockhashL1)
+				if err != nil {
+					log.Errorf("Error calculating acc input hash: %v", err)
+					return err
+				}
+
+				a.currentStreamBatch.AccInputHash = accInputHash
+
+				err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentBatchStreamData, nil)
+				if err != nil {
+					log.Errorf("Error adding batch: %v", err)
 					return err
 				}
 			}
 
-			a.currentStreamBatch.L1InfoRoot = sequence.L1InfoRoot
-			a.currentStreamBatch.Timestamp = sequence.Timestamp
+			// Reset current batch data
+			a.currentBatchStreamData = []byte{}
+			a.currentStreamBatchRaw = state.BatchRawV2{
+				Blocks: make([]state.L2BlockRaw, 0),
+			}
+			a.currentStreamL2Block = state.L2BlockRaw{}
 
-			// Calculate Acc Input Hash
-			oldBatch, _, err := a.state.GetBatch(ctx, a.currentStreamBatch.BatchNumber-1, nil)
+		case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_L2_BLOCK):
+			// Add previous block (if any) to the current batch
+			if a.currentStreamL2Block.BlockNumber != 0 {
+				a.currentStreamBatchRaw.Blocks = append(a.currentStreamBatchRaw.Blocks, a.currentStreamL2Block)
+			}
+			// "Open" the new block
+			l2Block := &datastream.L2Block{}
+			err := proto.Unmarshal(entry.Data, l2Block)
 			if err != nil {
-				log.Errorf("Error getting batch %d: %v", a.currentStreamBatch.BatchNumber-1, err)
+				log.Errorf("Error unmarshalling L2Block: %v", err)
 				return err
 			}
 
-			accInputHash, err := calculateAccInputHash(oldBatch.AccInputHash, a.currentStreamBatch.BatchL2Data, a.currentStreamBatch.L1InfoRoot, uint64(a.currentStreamBatch.Timestamp.Unix()), a.currentStreamBatch.Coinbase, forcedBlockhashL1)
+			header := state.ChangeL2BlockHeader{
+				DeltaTimestamp:  l2Block.DeltaTimestamp,
+				IndexL1InfoTree: l2Block.L1InfotreeIndex,
+			}
+
+			a.currentStreamL2Block.ChangeL2BlockHeader = header
+			a.currentStreamL2Block.Transactions = make([]state.L2TxRaw, 0)
+			a.currentStreamL2Block.BlockNumber = l2Block.Number
+			a.currentStreamBatch.L1InfoTreeIndex = l2Block.L1InfotreeIndex
+			a.currentStreamBatch.Coinbase = common.BytesToAddress(l2Block.Coinbase)
+			a.currentStreamBatch.GlobalExitRoot = common.BytesToHash(l2Block.GlobalExitRoot)
+
+		case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_TRANSACTION):
+			l2Tx := &datastream.Transaction{}
+			err := proto.Unmarshal(entry.Data, l2Tx)
 			if err != nil {
-				log.Errorf("Error calculating acc input hash: %v", err)
+				log.Errorf("Error unmarshalling L2Tx: %v", err)
+				return err
+			}
+			// New Tx raw
+			tx, err := state.DecodeTx(common.Bytes2Hex(l2Tx.Encoded))
+			if err != nil {
+				log.Errorf("Error decoding tx: %v", err)
 				return err
 			}
 
-			a.currentStreamBatch.AccInputHash = accInputHash
-
-			err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentBatchStreamData, nil)
-			if err != nil {
-				log.Errorf("Error adding batch: %v", err)
-				return err
+			l2TxRaw := state.L2TxRaw{
+				EfficiencyPercentage: uint8(l2Tx.EffectiveGasPricePercentage),
+				TxAlreadyEncoded:     false,
+				Tx:                   *tx,
 			}
+			a.currentStreamL2Block.Transactions = append(a.currentStreamL2Block.Transactions, l2TxRaw)
 		}
-	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_L2_BLOCK):
-		// Add previous block (if any) to the current batch
-		a.currentStreamBatchRaw.Blocks = append(a.currentStreamBatchRaw.Blocks, a.currentStreamL2Block)
-		// "Open" the new block
-		l2Block := &datastream.L2Block{}
-		err := proto.Unmarshal(entry.Data, l2Block)
-		if err != nil {
-			log.Errorf("Error unmarshalling L2Block: %v", err)
-			return err
-		}
-
-		header := state.ChangeL2BlockHeader{
-			DeltaTimestamp:  l2Block.DeltaTimestamp,
-			IndexL1InfoTree: l2Block.L1InfotreeIndex,
-		}
-
-		a.currentStreamL2Block.ChangeL2BlockHeader = header
-		a.currentStreamL2Block.Transactions = make([]state.L2TxRaw, 0)
-		a.currentStreamL2Block.BlockNumber = l2Block.Number
-		a.currentStreamBatch.L1InfoTreeIndex = l2Block.L1InfotreeIndex
-		a.currentStreamBatch.Coinbase = common.BytesToAddress(l2Block.Coinbase)
-		a.currentStreamBatch.GlobalExitRoot = common.BytesToHash(l2Block.GlobalExitRoot)
-
-	case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_TRANSACTION):
-		l2Tx := &datastream.Transaction{}
-		err := proto.Unmarshal(entry.Data, l2Tx)
-		if err != nil {
-			log.Errorf("Error unmarshalling L2Tx: %v", err)
-			return err
-		}
-		// New Tx raw
-		tx, err := state.DecodeTx(common.Bytes2Hex(l2Tx.Encoded))
-		if err != nil {
-			log.Errorf("Error decoding tx: %v", err)
-			return err
-		}
-
-		l2TxRaw := state.L2TxRaw{
-			EfficiencyPercentage: uint8(l2Tx.EffectiveGasPricePercentage),
-			TxAlreadyEncoded:     false,
-			Tx:                   *tx,
-		}
-		a.currentStreamL2Block.Transactions = append(a.currentStreamL2Block.Transactions, l2TxRaw)
 	}
 
 	return nil
