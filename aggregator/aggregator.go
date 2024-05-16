@@ -226,16 +226,16 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 			// Ger L1InfoRoot
 			sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
-			if err != nil {
+			if err != nil && !errors.Is(err, entities.ErrNotFound) {
 				log.Errorf("Error getting sequence: %v", err)
 				return err
 			}
 
-			for sequence == nil {
+			for errors.Is(err, entities.ErrNotFound) {
 				log.Debug("Waiting for sequence to be available")
 				time.Sleep(a.cfg.RetryTime.Duration)
 				sequence, err = a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
-				if err != nil {
+				if err != nil && !errors.Is(err, entities.ErrNotFound) {
 					log.Errorf("Error getting sequence: %v", err)
 					return err
 				}
@@ -1297,20 +1297,27 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 				}
 			}
 		}
-	} /*else {
+	} else {
 		// Initial batch must be handled differently
-		if batchToVerify.BatchNumber == 1 || batchToVerify.BatchNumber == a.cfg.UpgradeEtrogBatchNumber {
-			forcedBlockhashL1, err = a.state.GetVirtualBatchParentHash(ctx, batchToVerify.BatchNumber, nil)
+		if batchToVerify.BatchNumber == 1 {
+			// forcedBlockhashL1, err = a.state.GetVirtualBatchParentHash(ctx, batchToVerify.BatchNumber, nil)
+			virtualBatch, err := a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, batchToVerify.BatchNumber)
 			if err != nil {
 				return nil, err
 			}
-		} else {
+			l1Block, err := a.l1Syncr.GetL1BlockByNumber(ctx, virtualBatch.BlockNumber)
+			if err != nil {
+				return nil, err
+			}
+
+			forcedBlockhashL1 = l1Block.ParentHash
+		} /*else {
 			forcedBlockhashL1, err = a.state.GetForcedBatchParentHash(ctx, *batchToVerify.ForcedBatchNum, nil)
 			if err != nil {
 				return nil, err
 			}
-		}
-	}*/
+		}*/
+	}
 
 	// Get Witness
 	witness, err := getWitness(batchToVerify.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
