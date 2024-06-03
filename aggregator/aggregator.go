@@ -9,6 +9,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -59,7 +60,7 @@ type Aggregator struct {
 	ethTxManager *ethtxmanager.Client
 	streamClient *datastreamer.StreamClient
 	l1Syncr      synchronizer.Synchronizer
-	halted       bool
+	halted       atomic.Bool
 
 	profitabilityChecker    aggregatorTxProfitabilityChecker
 	timeSendFinalProof      time.Time
@@ -161,13 +162,15 @@ func (a *Aggregator) handleReorg(reorgData synchronizer.ReorgExecutionResult) {
 	}
 
 	// Delete batches from the reorged batch number
-	err = a.state.DeleteBatchesNewerThanBatchNumber(ctx, lastVBatchNumber, nil)
-	if err != nil {
-		log.Errorf("Error deleting batches newer than batch number %d: %v", lastVBatchNumber, err)
+	if err == nil {
+		err = a.state.DeleteBatchesNewerThanBatchNumber(ctx, lastVBatchNumber, nil)
+		if err != nil {
+			log.Errorf("Error deleting batches newer than batch number %d: %v", lastVBatchNumber, err)
+		}
 	}
 
 	// Halt the aggregator
-	a.halted = true
+	a.halted.Store(true)
 	for {
 		log.Warnf("Halting the aggregator due to a L1 reorg. Reorged data has been delete so it is safe to manually restart the aggregator.")
 		time.Sleep(10 * time.Second) // nolint:gomnd
@@ -178,7 +181,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 	ctx := context.Background()
 	forcedBlockhashL1 := common.Hash{}
 
-	if !a.halted {
+	if !a.halted.Load() {
 		if entry.Type != datastreamer.EntryType(datastreamer.EtBookmark) {
 			a.currentBatchStreamData = append(a.currentBatchStreamData, entry.Encode()...)
 
@@ -402,6 +405,12 @@ func (a *Aggregator) Start(ctx context.Context) error {
 		return err
 	}
 
+	// Delete batches newer than last verified batch number, including it (-1)
+	err = a.state.DeleteBatchesNewerThanBatchNumber(ctx, lastVerifiedBatchNumber-1, nil)
+	if err != nil {
+		return err
+	}
+
 	// Delete ungenerated recursive proofs
 	err = a.state.DeleteUngeneratedProofs(ctx, nil)
 	if err != nil {
@@ -518,7 +527,7 @@ func (a *Aggregator) Channel(stream prover.AggregatorService_ChannelServer) erro
 			return ctx.Err()
 
 		default:
-			if !a.halted {
+			if !a.halted.Load() {
 				isIdle, err := prover.IsIdle()
 				if err != nil {
 					log.Errorf("Failed to check if prover is idle: %v", err)
