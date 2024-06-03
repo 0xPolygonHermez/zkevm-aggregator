@@ -87,10 +87,10 @@ type ForcedBatchRawV2 struct {
 
 // L2TxRaw is the raw representation of a L2 transaction  inside a L2 block.
 type L2TxRaw struct {
-	EfficiencyPercentage uint8             // valid always
-	TxAlreadyEncoded     bool              // If true the tx is already encoded (data field is used)
-	Tx                   types.Transaction // valid if TxAlreadyEncoded == false
-	Data                 []byte            // valid if TxAlreadyEncoded == true
+	EfficiencyPercentage uint8              // valid always
+	TxAlreadyEncoded     bool               // If true the tx is already encoded (data field is used)
+	Tx                   *types.Transaction // valid if TxAlreadyEncoded == false
+	Data                 []byte             // valid if TxAlreadyEncoded == true
 }
 
 const (
@@ -156,8 +156,9 @@ func (b *BatchV2Encoder) AddBlockHeader(l2BlockHeader ChangeL2BlockHeader) {
 
 // AddTransactions adds a set of transactions to the batch.
 func (b *BatchV2Encoder) AddTransactions(transactions []L2TxRaw) error {
-	for _, tx := range transactions {
-		err := b.AddTransaction(tx)
+	for i := range transactions {
+		tx := transactions[i]
+		err := b.AddTransaction(&tx)
 		if err != nil {
 			return fmt.Errorf("can't encode tx: %w", err)
 		}
@@ -166,7 +167,7 @@ func (b *BatchV2Encoder) AddTransactions(transactions []L2TxRaw) error {
 }
 
 // AddTransaction adds a transaction to the batch.
-func (b *BatchV2Encoder) AddTransaction(transaction L2TxRaw) error {
+func (b *BatchV2Encoder) AddTransaction(transaction *L2TxRaw) error {
 	var err error
 	b.batchData, err = transaction.Encode(b.batchData)
 	if err != nil {
@@ -260,7 +261,8 @@ func DecodeForcedBatchV2(txsData []byte) (*ForcedBatchRawV2, error) {
 		return nil, fmt.Errorf("error decoding len(efficiencyPercentages) != len(txs). len(efficiencyPercentages)=%d, len(txs)=%d : %w", len(efficiencyPercentages), len(txs), ErrInvalidRLP)
 	}
 	forcedBatch := ForcedBatchRawV2{}
-	for i, tx := range txs {
+	for i := range txs {
+		tx := txs[i]
 		forcedBatch.Transactions = append(forcedBatch.Transactions, L2TxRaw{
 			Tx:                   tx,
 			EfficiencyPercentage: efficiencyPercentages[i],
@@ -319,7 +321,7 @@ func DecodeTxRLP(txsData []byte, offset int) (int, *L2TxRaw, error) {
 	}
 
 	l2Tx := &L2TxRaw{
-		Tx:                   *types.NewTx(legacyTx),
+		Tx:                   types.NewTx(legacyTx),
 		EfficiencyPercentage: efficiencyPercentage,
 	}
 

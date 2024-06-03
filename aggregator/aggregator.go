@@ -323,7 +323,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 			l2TxRaw := state.L2TxRaw{
 				EfficiencyPercentage: uint8(l2Tx.EffectiveGasPricePercentage),
 				TxAlreadyEncoded:     false,
-				Tx:                   *tx,
+				Tx:                   tx,
 			}
 			a.currentStreamL2Block.Transactions = append(a.currentStreamL2Block.Transactions, l2TxRaw)
 		}
@@ -567,7 +567,7 @@ func (a *Aggregator) sendFinalProof() {
 				continue
 			}
 
-			monitoredTxID, err := a.ethTxManager.Add(ctx, to, nil, big.NewInt(0), data, 0, nil)
+			monitoredTxID, err := a.ethTxManager.Add(ctx, to, nil, big.NewInt(0), data, a.cfg.GasOffset, nil)
 			if err != nil {
 				log.Errorf("Error Adding TX to ethTxManager: %v", err)
 				mTxLogger := ethtxmanager.CreateLogger(monitoredTxID, sender, to)

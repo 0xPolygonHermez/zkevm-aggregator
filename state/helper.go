@@ -33,7 +33,7 @@ const (
 	EfficiencyPercentageByteLength uint64 = 1
 )
 
-func prepareRLPTxData(tx types.Transaction) ([]byte, error) {
+func prepareRLPTxData(tx *types.Transaction) ([]byte, error) {
 	v, r, s := tx.RawSignatureValues()
 	sign := 1 - (v.Uint64() & 1)
 
@@ -71,10 +71,10 @@ func prepareRLPTxData(tx types.Transaction) ([]byte, error) {
 }
 
 // DecodeTxs extracts Transactions for its encoded form
-func DecodeTxs(txsData []byte, forkID uint64) ([]types.Transaction, []byte, []uint8, error) {
+func DecodeTxs(txsData []byte, forkID uint64) ([]*types.Transaction, []byte, []uint8, error) {
 	// Process coded txs
 	var pos uint64
-	var txs []types.Transaction
+	var txs []*types.Transaction
 	var efficiencyPercentages []uint8
 	txDataLength := uint64(len(txsData))
 	if txDataLength == 0 {
@@ -84,28 +84,28 @@ func DecodeTxs(txsData []byte, forkID uint64) ([]types.Transaction, []byte, []ui
 		num, err := strconv.ParseUint(hex.EncodeToString(txsData[pos:pos+1]), hex.Base, hex.BitSize64)
 		if err != nil {
 			log.Debug("error parsing header length: ", err)
-			return []types.Transaction{}, txsData, []uint8{}, err
+			return []*types.Transaction{}, txsData, []uint8{}, err
 		}
 		// First byte is the length and must be ignored
 		if num < c0 {
 			log.Debugf("error num < c0 : %d, %d", num, c0)
-			return []types.Transaction{}, txsData, []uint8{}, ErrInvalidData
+			return []*types.Transaction{}, txsData, []uint8{}, ErrInvalidData
 		}
 		length := num - c0
 		if length > shortRlp { // If rlp is bigger than length 55
 			// n is the length of the rlp data without the header (1 byte) for example "0xf7"
 			if (pos + 1 + num - f7) > txDataLength {
 				log.Debug("error parsing length: ", err)
-				return []types.Transaction{}, txsData, []uint8{}, err
+				return []*types.Transaction{}, txsData, []uint8{}, err
 			}
 			n, err := strconv.ParseUint(hex.EncodeToString(txsData[pos+1:pos+1+num-f7]), hex.Base, hex.BitSize64) // +1 is the header. For example 0xf7
 			if err != nil {
 				log.Debug("error parsing length: ", err)
-				return []types.Transaction{}, txsData, []uint8{}, err
+				return []*types.Transaction{}, txsData, []uint8{}, err
 			}
 			if n+num < f7 {
 				log.Debug("error n + num < f7: ", err)
-				return []types.Transaction{}, txsData, []uint8{}, ErrInvalidData
+				return []*types.Transaction{}, txsData, []uint8{}, ErrInvalidData
 			}
 			length = n + num - f7 // num - f7 is the header. For example 0xf7
 		}
@@ -119,19 +119,19 @@ func DecodeTxs(txsData []byte, forkID uint64) ([]types.Transaction, []byte, []ui
 		if endPos > txDataLength {
 			err := fmt.Errorf("endPos %d is bigger than txDataLength %d", endPos, txDataLength)
 			log.Debug("error parsing header: ", err)
-			return []types.Transaction{}, txsData, []uint8{}, ErrInvalidData
+			return []*types.Transaction{}, txsData, []uint8{}, ErrInvalidData
 		}
 
 		if endPos < pos {
 			err := fmt.Errorf("endPos %d is smaller than pos %d", endPos, pos)
 			log.Debug("error parsing header: ", err)
-			return []types.Transaction{}, txsData, []uint8{}, ErrInvalidData
+			return []*types.Transaction{}, txsData, []uint8{}, ErrInvalidData
 		}
 
 		if endPos < pos {
 			err := fmt.Errorf("endPos %d is smaller than pos %d", endPos, pos)
 			log.Debug("error parsing header: ", err)
-			return []types.Transaction{}, txsData, []uint8{}, ErrInvalidData
+			return []*types.Transaction{}, txsData, []uint8{}, ErrInvalidData
 		}
 
 		fullDataTx := txsData[pos:endPos]
@@ -153,17 +153,17 @@ func DecodeTxs(txsData []byte, forkID uint64) ([]types.Transaction, []byte, []ui
 		err = rlp.DecodeBytes(txInfo, &rlpFields)
 		if err != nil {
 			log.Error("error decoding tx Bytes: ", err, ". fullDataTx: ", hex.EncodeToString(fullDataTx), "\n tx: ", hex.EncodeToString(txInfo), "\n Txs received: ", hex.EncodeToString(txsData))
-			return []types.Transaction{}, txsData, []uint8{}, ErrInvalidData
+			return []*types.Transaction{}, txsData, []uint8{}, ErrInvalidData
 		}
 
 		legacyTx, err := RlpFieldsToLegacyTx(rlpFields, vData, rData, sData)
 		if err != nil {
 			log.Debug("error creating tx from rlp fields: ", err, ". fullDataTx: ", hex.EncodeToString(fullDataTx), "\n tx: ", hex.EncodeToString(txInfo), "\n Txs received: ", hex.EncodeToString(txsData))
-			return []types.Transaction{}, txsData, []uint8{}, err
+			return []*types.Transaction{}, txsData, []uint8{}, err
 		}
 
 		tx := types.NewTx(legacyTx)
-		txs = append(txs, *tx)
+		txs = append(txs, tx)
 	}
 	return txs, txsData, efficiencyPercentages, nil
 }
@@ -184,7 +184,7 @@ func DecodeTx(encodedTx string) (*types.Transaction, error) {
 
 // IsPreEIP155Tx checks if the tx is a tx that has a chainID as zero and
 // V field is either 27 or 28
-func IsPreEIP155Tx(tx types.Transaction) bool {
+func IsPreEIP155Tx(tx *types.Transaction) bool {
 	v, _, _ := tx.RawSignatureValues()
 	return tx.ChainId().Uint64() == 0 && (v.Uint64() == 27 || v.Uint64() == 28)
 }
