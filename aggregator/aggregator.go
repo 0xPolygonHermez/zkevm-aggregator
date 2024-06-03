@@ -159,10 +159,7 @@ func (a *Aggregator) handleReorg(reorgData synchronizer.ReorgExecutionResult) {
 	lastVBatchNumber, err := a.l1Syncr.GetLastestVirtualBatchNumber(ctx)
 	if err != nil {
 		log.Errorf("Error getting last virtual batch number: %v", err)
-	}
-
-	// Delete batches from the reorged batch number
-	if err == nil {
+	} else {
 		err = a.state.DeleteBatchesNewerThanBatchNumber(ctx, lastVBatchNumber, nil)
 		if err != nil {
 			log.Errorf("Error deleting batches newer than batch number %d: %v", lastVBatchNumber, err)
