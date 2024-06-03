@@ -31,8 +31,16 @@ func (p *PostgresStorage) GetBatch(ctx context.Context, batchNumber uint64, dbTx
 
 // DeleteBatchesOlderThanBatchNumber deletes batches previous to the given batch number
 func (p *PostgresStorage) DeleteBatchesOlderThanBatchNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) error {
-	const deleteGeneratedProofSQL = "DELETE FROM aggregator.batch WHERE batch_num < $1"
+	const deleteBatchesSQL = "DELETE FROM aggregator.batch WHERE batch_num < $1"
 	e := p.getExecQuerier(dbTx)
-	_, err := e.Exec(ctx, deleteGeneratedProofSQL, batchNumber)
+	_, err := e.Exec(ctx, deleteBatchesSQL, batchNumber)
+	return err
+}
+
+// DeleteBatchesNewerThanBatchNumber deletes batches previous to the given batch number
+func (p *PostgresStorage) DeleteBatchesNewerThanBatchNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) error {
+	const deleteBatchesSQL = "DELETE FROM aggregator.batch WHERE batch_num > $1"
+	e := p.getExecQuerier(dbTx)
+	_, err := e.Exec(ctx, deleteBatchesSQL, batchNumber)
 	return err
 }

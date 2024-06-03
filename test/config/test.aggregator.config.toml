@@ -60,6 +60,8 @@ UseFullWitness = false
 		SyncInterval = "10s"
 		SyncChunkSize = 1000
 		GenesisBlockNumber = 5511080
+		SyncBlockProtection = "finalized"
+		SyncBlockProtectionOffset = 0
 
 [EventLog]
 	[EventLog.DB]

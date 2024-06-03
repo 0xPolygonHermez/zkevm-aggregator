@@ -57,4 +57,5 @@ type stateInterface interface {
 	AddBatch(ctx context.Context, batch *state.Batch, datastream []byte, dbTx pgx.Tx) error
 	GetBatch(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (*state.Batch, []byte, error)
 	DeleteBatchesOlderThanBatchNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) error
+	DeleteBatchesNewerThanBatchNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) error
 }

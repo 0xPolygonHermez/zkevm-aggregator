@@ -26,4 +26,5 @@ type storage interface {
 	AddBatch(ctx context.Context, batch *Batch, datastream []byte, dbTx pgx.Tx) error
 	GetBatch(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (*Batch, []byte, error)
 	DeleteBatchesOlderThanBatchNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) error
+	DeleteBatchesNewerThanBatchNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) error
 }

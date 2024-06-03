@@ -143,8 +143,33 @@ func New(ctx context.Context, cfg Config, stateInterface stateInterface, etherma
 
 	// Set function to handle the batches from the data stream
 	a.streamClient.SetProcessEntryFunc(a.handleReceivedDataStream)
+	a.l1Syncr.SetCallbackOnReorgDone(a.handleReorg)
 
 	return a, nil
+}
+
+func (a *Aggregator) handleReorg(reorgData synchronizer.ReorgExecutionResult) {
+	log.Warnf("Reorg detected, reorgData: %+v", reorgData)
+
+	ctx := context.Background()
+
+	// Get new latest verified batch number
+	lastVBatchNumber, err := a.l1Syncr.GetLastestVirtualBatchNumber(ctx)
+	if err != nil {
+		log.Errorf("Error getting last virtual batch number: %v", err)
+	}
+
+	// Delete batches from the reorged batch number
+	err = a.state.DeleteBatchesNewerThanBatchNumber(ctx, lastVBatchNumber, nil)
+	if err != nil {
+		log.Errorf("Error deleting batches newer than batch number %d: %v", lastVBatchNumber, err)
+	}
+
+	// Halt the aggregator
+	for {
+		log.Warnf("Halting the aggregator due to a L1 reorg. Reorged data has been delete so it is safe to manually restart the aggregator.")
+		time.Sleep(1 * time.Minute) // nolint:gomnd
+	}
 }
 
 func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, client *datastreamer.StreamClient, server *datastreamer.StreamServer) error {
