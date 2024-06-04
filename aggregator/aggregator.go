@@ -26,6 +26,7 @@ import (
 	streamlog "github.com/0xPolygonHermez/zkevm-data-streamer/log"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
 	ethtxlog "github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	synclog "github.com/0xPolygonHermez/zkevm-synchronizer-l1/log"
 	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/state/entities"
 	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/synchronizer"
 	"github.com/ethereum/go-ethereum/common"
@@ -119,6 +120,15 @@ func New(ctx context.Context, cfg Config, stateInterface stateInterface, etherma
 		log.Fatalf("failed to create stream client, error: %v", err)
 	}
 	log.Info("Data stream client created.")
+
+	// Synchonizer logs
+	syncLogConfig := synclog.Config{
+		Environment: synclog.LogEnvironment(cfg.Log.Environment),
+		Level:       cfg.Log.Level,
+		Outputs:     cfg.Log.Outputs,
+	}
+
+	cfg.Synchronizer.Log = syncLogConfig
 
 	// Create L1 synchronizer client
 	cfg.Synchronizer.Etherman.L1URL = cfg.EthTxManager.Etherman.URL
