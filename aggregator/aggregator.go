@@ -397,6 +397,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	// Initial L1 Sync blocking
 	err = a.l1Syncr.Sync(true)
 	if err != nil {
+		log.Fatalf("Failed to synchronize from L1: %v", err)
 		return err
 	}
 
@@ -443,7 +444,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	go func() {
 		err := a.l1Syncr.Sync(false)
 		if err != nil {
-			log.Errorf("Failed to synchronize from L1: %v", err)
+			log.Fatalf("Failed to synchronize from L1: %v", err)
 		}
 	}()
 
@@ -1326,6 +1327,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 			if !contained && l2blockRaw.IndexL1InfoTree != 0 {
 				leaves, err := a.l1Syncr.GetL1InfoTreeLeaves(ctx, []uint32{l2blockRaw.IndexL1InfoTree})
 				if err != nil {
+					log.Errorf("Error getting l1InfoTreeLeaf: %v", err)
 					return nil, err
 				}
 
@@ -1335,7 +1337,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 				log.Infof("Calling tree.ComputeMerkleProof")
 				smtProof, calculatedL1InfoRoot, err := tree.ComputeMerkleProof(l2blockRaw.IndexL1InfoTree, aLeaves)
 				if err != nil {
-					log.Errorf("Error%v", err)
+					log.Errorf("Error computing merkle proof: %v", err)
 					return nil, err
 				}
 
@@ -1362,10 +1364,12 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 		if batchToVerify.BatchNumber == 1 {
 			virtualBatch, err := a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, batchToVerify.BatchNumber)
 			if err != nil {
+				log.Errorf("Error getting virtual batch: %v", err)
 				return nil, err
 			}
 			l1Block, err := a.l1Syncr.GetL1BlockByNumber(ctx, virtualBatch.BlockNumber)
 			if err != nil {
+				log.Errorf("Error getting l1 block: %v", err)
 				return nil, err
 			}
 
@@ -1382,6 +1386,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 	// Get Witness
 	witness, err := getWitness(batchToVerify.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
 	if err != nil {
+		log.Errorf("Failed to get witness, err: %v", err)
 		return nil, err
 	}
 
