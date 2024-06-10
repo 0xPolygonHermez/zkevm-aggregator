@@ -61,7 +61,7 @@ UseFullWitness = false
 		SyncChunkSize = 1000
 		GenesisBlockNumber = 5511080
 		SyncBlockProtection = "finalized"
-		SyncBlockProtectionOffset = 0
+		SyncBlockFinalized = "finalized"
 
 [EventLog]
 	[EventLog.DB]
