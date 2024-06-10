@@ -93,9 +93,6 @@ type Config struct {
 	// WitnessURL is the URL of the witness server
 	WitnessURL string `mapstructure:"WitnessURL"`
 
-	// LERContract is the contract address to get the LER from
-	LERContract string `mapstructure:"LERContract"`
-
 	// UseL1BatchData is a flag to enable the use of L1 batch data in the aggregator
 	UseL1BatchData bool `mapstructure:"UseL1BatchData"`
 
