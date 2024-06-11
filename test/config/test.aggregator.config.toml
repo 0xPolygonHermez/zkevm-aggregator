@@ -11,6 +11,7 @@ SenderAddress = "0x3f2963d678442c4af27a797453b64ef6ce9443e9"
 CleanupLockedProofsInterval = "2m"
 GeneratingProofCleanupThreshold = "10m"
 ForkId = 9
+GassOffset = 0
 WitnessURL = "http://zkevm-erigon-seq:8123"
 UseL1BatchData = true
 UseFullWitness = false
@@ -31,9 +32,8 @@ UseFullWitness = false
 	[Aggregator.EthTxManager]
 		FrequencyToMonitorTxs = "1s"
 		WaitTxToBeMined = "2m"
-		ConsolidationL1ConfirmationBlocks = 5
-		FinalizationL1ConfirmationBlocks = 10
-		WaitReceiptToBeGenerated = "8s"
+		GetReceiptMaxTime = "250ms"
+		GetReceiptWaitInterval = "1s"
 		PrivateKeys = [
 			{Path = "/pk/aggregator.keystore", Password = "testonly"},
 		]
@@ -42,6 +42,8 @@ UseFullWitness = false
 		MaxGasPriceLimit = 0
 		PersistenceFilename = ""
 		ReadPendingL1Txs = false
+		SafeStatusL1NumberOfBlocks = 0
+		FinalizedStatusL1NumberOfBlocks = 0
 			[Aggregator.EthTxManager.Etherman]
 				URL = ""
 				L1ChainID = 11155111

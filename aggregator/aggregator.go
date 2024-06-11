@@ -254,8 +254,8 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 					if common.Bytes2Hex(batchl2Data) != common.Bytes2Hex(virtualBatch.BatchL2Data) {
 						log.Warnf("BatchL2Data from L1 and data stream are different for batch %d", a.currentStreamBatch.BatchNumber)
-						log.Debugf("DataStream BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
-						log.Debugf("L1 BatchL2Data:%v", common.Bytes2Hex(virtualBatch.BatchL2Data))
+						log.Warnf("DataStream BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
+						log.Warnf("L1 BatchL2Data:%v", common.Bytes2Hex(virtualBatch.BatchL2Data))
 					}
 
 					// Ger L1InfoRoot
