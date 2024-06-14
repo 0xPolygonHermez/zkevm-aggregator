@@ -10,7 +10,7 @@
       test:
         strategy:
           matrix:
-            go-version: [ 1.19.x ]
+            go-version: [ 1.21.x ]
             goarch: [ "amd64" ]
         runs-on: ubuntu-latest
         steps:
