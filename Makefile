@@ -80,6 +80,10 @@ build-docker-nc: ## Builds a docker image with the node binary - but without bui
 stop: ## Stops all services
 	docker-compose down
 
+.PHONY: test
+test:
+	go test -count=1 -short -race -p 1 -timeout 60s ./...
+
 .PHONY: install-linter
 install-linter: ## Installs the linter
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin v1.54.2
