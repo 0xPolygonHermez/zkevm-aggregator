@@ -3,6 +3,7 @@ package state
 import (
 	"time"
 
+	"github.com/0xPolygonHermez/zkevm-aggregator/state/datastream"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -40,6 +41,7 @@ type Batch struct {
 	ForcedBatchNum *uint64
 	ChainID        uint64
 	ForkID         uint64
+	Type           datastream.BatchType
 }
 
 // Sequence represents the sequence interval

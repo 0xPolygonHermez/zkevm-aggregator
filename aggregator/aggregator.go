@@ -1,12 +1,14 @@
 package aggregator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,6 +33,7 @@ import (
 	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/synchronizer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/iden3/go-iden3-crypto/keccak256"
+	"github.com/iden3/go-iden3-crypto/poseidon"
 	"google.golang.org/grpc"
 	grpchealth "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/peer"
@@ -204,6 +207,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 				a.currentStreamBatch.BatchNumber = batch.Number
 				a.currentStreamBatch.ChainID = batch.ChainId
 				a.currentStreamBatch.ForkID = batch.ForkId
+				a.currentStreamBatch.Type = batch.Type
 			case datastreamer.EntryType(datastream.EntryType_ENTRY_TYPE_BATCH_END):
 				batch := &datastream.BatchEnd{}
 				err := proto.Unmarshal(entry.Data, batch)
@@ -222,11 +226,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 				// Save Current Batch
 				if a.currentStreamBatch.BatchNumber != 0 {
-					batchl2Data, err := state.EncodeBatchV2(&a.currentStreamBatchRaw)
-					if err != nil {
-						log.Errorf("Error encoding batch: %v", err)
-						return err
-					}
+					var batchl2Data []byte
 
 					// Get batchl2Data from L1
 					virtualBatch, err := a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
@@ -246,15 +246,26 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 						}
 					}
 
-					if a.cfg.UseL1BatchData {
+					// If the batch is marked as Invalid in the DS we enforce retrieve the data from L1
+					if a.cfg.UseL1BatchData || a.currentStreamBatch.Type == datastream.BatchType_BATCH_TYPE_INVALID {
 						a.currentStreamBatch.BatchL2Data = virtualBatch.BatchL2Data
 					} else {
+						batchl2Data, err = state.EncodeBatchV2(&a.currentStreamBatchRaw)
+						if err != nil {
+							log.Errorf("Error encoding batch: %v", err)
+							return err
+						}
 						a.currentStreamBatch.BatchL2Data = batchl2Data
 					}
 
 					if common.Bytes2Hex(batchl2Data) != common.Bytes2Hex(virtualBatch.BatchL2Data) {
 						log.Warnf("BatchL2Data from L1 and data stream are different for batch %d", a.currentStreamBatch.BatchNumber)
-						log.Warnf("DataStream BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
+
+						if a.currentStreamBatch.Type == datastream.BatchType_BATCH_TYPE_INVALID {
+							log.Warnf("Batch is marked as invalid in data stream")
+						} else {
+							log.Warnf("DataStream BatchL2Data:%v", common.Bytes2Hex(batchl2Data))
+						}
 						log.Warnf("L1 BatchL2Data:%v", common.Bytes2Hex(virtualBatch.BatchL2Data))
 					}
 
@@ -1231,7 +1242,17 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 
 	log.Info("Batch proof generated")
 
-	proof.Proof = resGetProof
+	// Sanity Check: state root from the proof must match the one from the batch
+	proofStateRoot, err := a.getStateRootFromBatchProof(resGetProof)
+	if err != nil {
+		err = fmt.Errorf("failed to get state root from batch proof, %w", err)
+		log.Error(FirstToUpper(err.Error()))
+		return false, err
+	}
+	// Check if the state root from the proof matches the one from the batch
+	if !bytes.Equal(proofStateRoot.Bytes(), batchToProve.StateRoot.Bytes()) {
+		log.Fatalf("State root from the proof [%#x] does not match the one from the batch [%#x]", proofStateRoot, batchToProve.StateRoot)
+	}
 
 	// NOTE(pg): the defer func is useless from now on, use a different variable
 	// name for errors (or shadow err in inner scopes) to not trigger it.
@@ -1257,6 +1278,53 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 	}
 
 	return true, nil
+}
+
+func (a *Aggregator) getStateRootFromBatchProof(resGetProof string) (common.Hash, error) {
+	type Publics struct {
+		Publics []string `mapstructure:"publics"`
+	}
+
+	var publics Publics
+	err := json.Unmarshal([]byte(resGetProof), &publics)
+	if err != nil {
+		log.Errorf("Error unmarshalling proof: %v", err)
+		return common.Hash{}, err
+	}
+
+	var v [8]uint64
+	var j = 0
+	for i := 19; i < 19+8; i++ {
+		u64, err := strconv.ParseInt(publics.Publics[i], 10, 64)
+		if err != nil {
+			log.Fatal(err)
+		}
+		v[j] = uint64(u64)
+		j++
+	}
+	bigSR := fea2scalar(v[:])
+	hexSR := fmt.Sprintf("%x", bigSR)
+	if len(hexSR)%2 != 0 {
+		hexSR = "0" + hexSR
+	}
+
+	return common.HexToHash(hexSR), nil
+}
+
+// fea2scalar converts array of uint64 values into one *big.Int.
+func fea2scalar(v []uint64) *big.Int {
+	if len(v) != poseidon.NROUNDSF {
+		return big.NewInt(0)
+	}
+	res := new(big.Int).SetUint64(v[0])
+	res.Add(res, new(big.Int).Lsh(new(big.Int).SetUint64(v[1]), 32))  //nolint:gomnd
+	res.Add(res, new(big.Int).Lsh(new(big.Int).SetUint64(v[2]), 64))  //nolint:gomnd
+	res.Add(res, new(big.Int).Lsh(new(big.Int).SetUint64(v[3]), 96))  //nolint:gomnd
+	res.Add(res, new(big.Int).Lsh(new(big.Int).SetUint64(v[4]), 128)) //nolint:gomnd
+	res.Add(res, new(big.Int).Lsh(new(big.Int).SetUint64(v[5]), 160)) //nolint:gomnd
+	res.Add(res, new(big.Int).Lsh(new(big.Int).SetUint64(v[6]), 192)) //nolint:gomnd
+	res.Add(res, new(big.Int).Lsh(new(big.Int).SetUint64(v[7]), 224)) //nolint:gomnd
+	return res
 }
 
 // canVerifyProof returns true if we have reached the timeout to verify a proof

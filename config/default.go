@@ -16,7 +16,7 @@ GeneratingProofCleanupThreshold = "10m"
 ForkId = 9
 GasOffset = 0
 WitnessURL = "localhost:8123"
-UseL1BatchData = false
+UseL1BatchData = true
 UseFullWitness = false
 	[Aggregator.DB]
 		Name = "aggregator_db"
