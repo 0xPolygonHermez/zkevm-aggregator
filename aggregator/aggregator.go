@@ -1280,6 +1280,7 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 	return true, nil
 }
 
+// GetStateRootFromBatchProof returns the state root from the batch proof.
 func GetStateRootFromBatchProof(resGetProof string) (common.Hash, error) {
 	type Publics struct {
 		Publics []string `mapstructure:"publics"`
