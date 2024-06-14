@@ -1243,7 +1243,7 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 	log.Info("Batch proof generated")
 
 	// Sanity Check: state root from the proof must match the one from the batch
-	proofStateRoot, err := a.getStateRootFromBatchProof(resGetProof)
+	proofStateRoot, err := GetStateRootFromBatchProof(resGetProof)
 	if err != nil {
 		err = fmt.Errorf("failed to get state root from batch proof, %w", err)
 		log.Error(FirstToUpper(err.Error()))
@@ -1280,7 +1280,7 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 	return true, nil
 }
 
-func (a *Aggregator) getStateRootFromBatchProof(resGetProof string) (common.Hash, error) {
+func GetStateRootFromBatchProof(resGetProof string) (common.Hash, error) {
 	type Publics struct {
 		Publics []string `mapstructure:"publics"`
 	}
