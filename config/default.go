@@ -18,6 +18,10 @@ GasOffset = 0
 WitnessURL = "localhost:8123"
 UseL1BatchData = false
 UseFullWitness = false
+SettlementBackend = "l1"
+AggLayerTxTimeout = "5m"
+AggLayerURL = ""
+SequencerPrivateKey = {}
 	[Aggregator.DB]
 		Name = "aggregator_db"
 		User = "aggregator_user"

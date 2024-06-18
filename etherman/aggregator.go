@@ -98,6 +98,11 @@ func (etherman *Client) GetBatchAccInputHash(ctx context.Context, batchNumber ui
 	return rollupData.AccInputHash, nil
 }
 
+// GetRollupId returns the rollup id
+func (etherMan *Client) GetRollupId() uint32 {
+	return etherMan.RollupID
+}
+
 // generateRandomAuth generates an authorization instance from a
 // randomly generated private key to be used to estimate gas for PoE
 // operations NOT restricted to the Trusted Sequencer

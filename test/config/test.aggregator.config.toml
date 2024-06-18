@@ -14,6 +14,10 @@ ForkId = 9
 GasOffset = 0
 WitnessURL = "http://zkevm-erigon-seq:8123"
 UseL1BatchData = true
+SettlementBackend = "l1"
+AggLayerTxTimeout = "5m"
+AggLayerURL = ""
+SequencerPrivateKey = {}
 UseFullWitness = false
 	[Aggregator.DB]
 		Name = "aggregator_db"

@@ -2,18 +2,21 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"time"
 
 	"github.com/0xPolygonHermez/zkevm-aggregator"
 	"github.com/0xPolygonHermez/zkevm-aggregator/aggregator"
 	"github.com/0xPolygonHermez/zkevm-aggregator/config"
+	"github.com/0xPolygonHermez/zkevm-aggregator/config/types"
 	"github.com/0xPolygonHermez/zkevm-aggregator/db"
 	"github.com/0xPolygonHermez/zkevm-aggregator/etherman"
 	"github.com/0xPolygonHermez/zkevm-aggregator/event"
@@ -23,6 +26,7 @@ import (
 	"github.com/0xPolygonHermez/zkevm-aggregator/metrics"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state/pgstatestorage"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
@@ -158,7 +162,22 @@ func newEtherman(c config.Config) (*etherman.Client, error) {
 }
 
 func runAggregator(ctx context.Context, config aggregator.Config, etherman *etherman.Client, st *state.State) {
-	agg, err := aggregator.New(ctx, config, st, etherman)
+	var (
+		aggLayerClient aggregator.AgglayerClientInterface
+		pk             *ecdsa.PrivateKey
+		err            error
+	)
+
+	if config.SettlementBackend == aggregator.AggLayer {
+		aggLayerClient = aggregator.NewAggLayerClient(config.AggLayerURL)
+
+		pk, err = newKeyFromKeystore(config.SequencerPrivateKey)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	agg, err := aggregator.New(ctx, config, st, etherman, aggLayerClient, pk)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -264,4 +283,20 @@ func logVersion() {
 		"built", zkevm.BuildDate,
 		"os/arch", fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 	)
+}
+
+// newKeyFromKeystore creates a private key from a keystore file
+func newKeyFromKeystore(cfg types.KeystoreFileConfig) (*ecdsa.PrivateKey, error) {
+	if cfg.Path == "" && cfg.Password == "" {
+		return nil, nil
+	}
+	keystoreEncrypted, err := os.ReadFile(filepath.Clean(cfg.Path))
+	if err != nil {
+		return nil, err
+	}
+	key, err := keystore.DecryptKey(keystoreEncrypted, cfg.Password)
+	if err != nil {
+		return nil, err
+	}
+	return key.PrivateKey, nil
 }

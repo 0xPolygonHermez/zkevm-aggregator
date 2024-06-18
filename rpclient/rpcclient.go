@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/0xPolygon/cdk-rpc/types"
 )
 
 const jsonRPCVersion = "2.0"
@@ -23,6 +25,14 @@ type Response struct {
 	JSONRPC string
 	ID      interface{}
 	Result  json.RawMessage
+	Error   *ErrorObject
+}
+
+// ErrorObject is a jsonrpc error
+type ErrorObject struct {
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    *types.ArgBytes `json:"data,omitempty"`
 }
 
 // RPCClient is a client for the JSON RPC
