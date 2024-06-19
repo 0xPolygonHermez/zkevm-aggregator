@@ -93,9 +93,7 @@ func New(
 	ctx context.Context,
 	cfg Config,
 	stateInterface stateInterface,
-	etherman etherman,
-	agglayerClient AgglayerClientInterface,
-	sequencerPrivateKey *ecdsa.PrivateKey) (*Aggregator, error) {
+	etherman etherman) (*Aggregator, error) {
 	var profitabilityChecker aggregatorTxProfitabilityChecker
 
 	switch cfg.TxProfitabilityCheckerType {
@@ -149,6 +147,20 @@ func New(
 		log.Fatalf("failed to create synchronizer client, error: %v", err)
 	}
 
+	var (
+		aggLayerClient      AgglayerClientInterface
+		sequencerPrivateKey *ecdsa.PrivateKey
+	)
+
+	if cfg.SettlementBackend == AggLayer {
+		aggLayerClient = NewAggLayerClient(cfg.AggLayerURL)
+
+		sequencerPrivateKey, err = newKeyFromKeystore(cfg.SequencerPrivateKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	a := &Aggregator{
 		cfg:                     cfg,
 		state:                   stateInterface,
@@ -162,7 +174,7 @@ func New(
 		timeCleanupLockedProofs: cfg.CleanupLockedProofsInterval,
 		finalProof:              make(chan finalProofMsg),
 		currentBatchStreamData:  []byte{},
-		aggLayerClient:          agglayerClient,
+		aggLayerClient:          aggLayerClient,
 		sequencerPrivateKey:     sequencerPrivateKey,
 	}
 

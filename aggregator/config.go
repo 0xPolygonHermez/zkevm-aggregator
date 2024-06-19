@@ -1,8 +1,11 @@
 package aggregator
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 
 	"github.com/0xPolygonHermez/zkevm-aggregator/config/types"
 	"github.com/0xPolygonHermez/zkevm-aggregator/db"
@@ -10,6 +13,7 @@ import (
 	"github.com/0xPolygonHermez/zkevm-aggregator/log"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
 	syncronizerConfig "github.com/0xPolygonHermez/zkevm-synchronizer-l1/config"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 )
 
 // SettlementBackend is the type of the settlement backend
@@ -144,4 +148,20 @@ type StreamClientCfg struct {
 	Server string `mapstructure:"Server"`
 	// Log is the log configuration
 	Log log.Config `mapstructure:"Log"`
+}
+
+// newKeyFromKeystore creates a private key from a keystore file
+func newKeyFromKeystore(cfg types.KeystoreFileConfig) (*ecdsa.PrivateKey, error) {
+	if cfg.Path == "" && cfg.Password == "" {
+		return nil, nil
+	}
+	keystoreEncrypted, err := os.ReadFile(filepath.Clean(cfg.Path))
+	if err != nil {
+		return nil, err
+	}
+	key, err := keystore.DecryptKey(keystoreEncrypted, cfg.Password)
+	if err != nil {
+		return nil, err
+	}
+	return key.PrivateKey, nil
 }
