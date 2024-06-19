@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/0xPolygon/cdk-rpc/rpc"
 	cdkTypes "github.com/0xPolygon/cdk-rpc/types"
 	"github.com/0xPolygonHermez/zkevm-aggregator/aggregator/metrics"
 	"github.com/0xPolygonHermez/zkevm-aggregator/aggregator/prover"
@@ -21,7 +22,6 @@ import (
 	ethmanTypes "github.com/0xPolygonHermez/zkevm-aggregator/etherman/types"
 	"github.com/0xPolygonHermez/zkevm-aggregator/l1infotree"
 	"github.com/0xPolygonHermez/zkevm-aggregator/log"
-	"github.com/0xPolygonHermez/zkevm-aggregator/rpclient"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state"
 	"github.com/0xPolygonHermez/zkevm-aggregator/state/datastream"
 	"github.com/0xPolygonHermez/zkevm-data-streamer/datastreamer"
@@ -668,7 +668,7 @@ func (a *Aggregator) settleWithAggLayer(
 	log.Debug("final proof signedTx: ", signedTx.Tx.ZKP.Proof.Hex())
 	txHash, err := a.aggLayerClient.SendTx(*signedTx)
 	if err != nil {
-		log.Errorf("failed to send tx to the interop: %v", err)
+		log.Errorf("failed to send tx to the agglayer: %v", err)
 		a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
 
 		return false
@@ -679,7 +679,7 @@ func (a *Aggregator) settleWithAggLayer(
 	waitCtx, cancelFunc := context.WithDeadline(ctx, time.Now().Add(a.cfg.AggLayerTxTimeout.Duration))
 	defer cancelFunc()
 	if err := a.aggLayerClient.WaitTxToBeMined(txHash, waitCtx); err != nil {
-		log.Errorf("interop didn't mine the tx: %v", err)
+		log.Errorf("agglayer didn't mine the tx: %v", err)
 		a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
 
 		return false
@@ -1552,16 +1552,16 @@ func calculateAccInputHash(oldAccInputHash common.Hash, batchData []byte, l1Info
 
 func getWitness(batchNumber uint64, URL string, fullWitness bool) ([]byte, error) {
 	var witness string
-	var response rpclient.Response
+	var response rpc.Response
 	var err error
 
 	if fullWitness {
-		response, err = rpclient.JSONRPCCall(URL, "zkevm_getBatchWitness", nil, "1", batchNumber, "full")
+		response, err = rpc.JSONRPCCall(URL, "zkevm_getBatchWitness", "1", batchNumber, "full")
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		response, err = rpclient.JSONRPCCall(URL, "zkevm_getBatchWitness", nil, "batch-1", batchNumber)
+		response, err = rpc.JSONRPCCall(URL, "zkevm_getBatchWitness", "batch-1", batchNumber)
 		if err != nil {
 			return nil, err
 		}

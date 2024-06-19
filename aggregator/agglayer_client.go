@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0xPolygon/cdk-rpc/rpc"
 	"github.com/0xPolygon/cdk-rpc/types"
-	"github.com/0xPolygonHermez/zkevm-aggregator/rpclient"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -33,7 +33,7 @@ func NewAggLayerClient(url string) *AggLayerClient {
 
 // SendTx sends a signed transaction to the AggLayer
 func (c *AggLayerClient) SendTx(signedTx SignedTx) (common.Hash, error) {
-	response, err := rpclient.JSONRPCCall(c.url, "interop_sendTx", nil, signedTx)
+	response, err := rpc.JSONRPCCall(c.url, "interop_sendTx", signedTx)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -59,7 +59,7 @@ func (c *AggLayerClient) WaitTxToBeMined(hash common.Hash, ctx context.Context) 
 		case <-ctx.Done():
 			return errors.New("context finished before tx was mined")
 		case <-ticker.C:
-			response, err := rpclient.JSONRPCCall(c.url, "interop_getTxStatus", nil, hash)
+			response, err := rpc.JSONRPCCall(c.url, "interop_getTxStatus", hash)
 			if err != nil {
 				return err
 			}
