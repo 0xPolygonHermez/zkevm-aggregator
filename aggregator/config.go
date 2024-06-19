@@ -130,7 +130,7 @@ type Config struct {
 	Synchronizer syncronizerConfig.Config `mapstructure:"Synchronizer"`
 
 	// SettlementBackend configuration defines how a final ZKP should be settled. Directly to L1 or over the Beethoven service.
-	SettlementBackend SettlementBackend `mapstructure:"SettlementBackend"`
+	SettlementBackend SettlementBackend `mapstructure:"SettlementBackend" jsonschema:"enum=agglayer,enum=l1"`
 
 	// SequencerPrivateKey Private key of the trusted sequencer
 	SequencerPrivateKey types.KeystoreFileConfig `mapstructure:"SequencerPrivateKey"`
