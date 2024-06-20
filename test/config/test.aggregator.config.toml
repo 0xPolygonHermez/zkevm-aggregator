@@ -54,19 +54,26 @@ UseFullWitness = false
 				HTTPHeaders = []
 	[Aggregator.Synchronizer]
 		[Aggregator.Synchronizer.DB]
-		Name = "sync_db"
-		User = "sync_user"
-		Password = "sync_password"
-		Host = "zkevm-db"
-		Port = "5432"
-		EnableLog = false
-		MaxConns = 10
+			Name = "sync_db"
+			User = "sync_user"
+			Password = "sync_password"
+			Host = "zkevm-db"
+			Port = "5432"
+			EnableLog = false
+			MaxConns = 10
 		[Aggregator.Synchronizer.Synchronizer]
-		SyncInterval = "10s"
-		SyncChunkSize = 1000
-		GenesisBlockNumber = 5511080
-		SyncUpToBlock = "finalized"
-		BlockFinality = "finalized"
+			SyncInterval = "10s"
+			SyncChunkSize = 1000
+			GenesisBlockNumber = 5511080
+			SyncUpToBlock = "finalized"
+			BlockFinality = "finalized"
+		[Aggregator.Synchronizer.Etherman]
+			[Aggregator.Synchronizer.Etherman.Validium]
+				Enabled = false
+				TrustedSequencerURL = ""
+				DataSourcePriority = ["trusted", "external"]
+				[Aggregator.Synchronizer.Etherman.Validium.Translator]
+					FullMatchRules = []
 
 [EventLog]
 	[EventLog.DB]

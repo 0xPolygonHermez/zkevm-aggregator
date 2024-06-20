@@ -57,20 +57,22 @@ SequencerPrivateKey = {}
 				HTTPHeaders = []
 	[Aggregator.Synchronizer]
 		[Aggregator.Synchronizer.DB]
-		Name = "sync_db"
-		User = "sync_user"
-		Password = "sync_password"
-		Host = "zkevm-db"
-		Port = "5432"
-		EnableLog = false
-		MaxConns = 10
+			Name = "sync_db"
+			User = "sync_user"
+			Password = "sync_password"
+			Host = "zkevm-db"
+			Port = "5432"
+			EnableLog = false
+			MaxConns = 10
 		[Aggregator.Synchronizer.Synchronizer]
-		SyncInterval = "10s"
-		SyncChunkSize = 1000
-		GenesisBlockNumber = 5511080
-		SyncUpToBlock = "finalized"
-		BlockFinality = "finalized"
-
+			SyncInterval = "10s"
+			SyncChunkSize = 1000
+			GenesisBlockNumber = 5511080
+			SyncUpToBlock = "finalized"
+			BlockFinality = "finalized"
+			OverrideStorageCheck = false
+		[Aggregator.Synchronizer.Etherman.Validium]
+			Enabled = false
 [EventLog]
 	[EventLog.DB]
 `
