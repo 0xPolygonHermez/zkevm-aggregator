@@ -71,8 +71,9 @@ SequencerPrivateKey = {}
 			SyncUpToBlock = "finalized"
 			BlockFinality = "finalized"
 			OverrideStorageCheck = false
-		[Aggregator.Synchronizer.Etherman.Validium]
-			Enabled = false
+		[Aggregator.Synchronizer.Etherman]
+			[Aggregator.Synchronizer.Etherman.Validium]
+				Enabled = false
 [EventLog]
 	[EventLog.DB]
 `
