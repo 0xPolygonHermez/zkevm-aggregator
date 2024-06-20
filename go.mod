@@ -6,7 +6,7 @@ require (
 	github.com/0xPolygon/cdk-rpc v0.0.0-20240419104226-c0a62ba0f49d
 	github.com/0xPolygonHermez/zkevm-data-streamer v0.2.2
 	github.com/0xPolygonHermez/zkevm-ethtx-manager v0.1.9
-	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.6.0
+	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.6.1
 	github.com/ethereum/go-ethereum v1.14.5
 	github.com/gobuffalo/packr/v2 v2.8.3
 	github.com/hermeznetwork/tracerr v0.3.2
@@ -28,6 +28,7 @@ require (
 )
 
 require (
+	github.com/0xPolygon/cdk-data-availability v0.0.7 // indirect
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
@@ -59,8 +60,8 @@ require (
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-pkgz/expirable-cache v0.0.3 // indirect
-	github.com/gobuffalo/logger v1.0.6 // indirect
-	github.com/gobuffalo/packd v1.0.1 // indirect
+	github.com/gobuffalo/logger v1.0.7 // indirect
+	github.com/gobuffalo/packd v1.0.2 // indirect
 	github.com/gofrs/flock v0.8.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
@@ -77,7 +78,7 @@ require (
 	github.com/jackc/pgtype v1.14.0 // indirect
 	github.com/jackc/puddle v1.3.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0 // indirect
-	github.com/karrick/godirwalk v1.16.1 // indirect
+	github.com/karrick/godirwalk v1.17.0 // indirect
 	github.com/klauspost/compress v1.17.2 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
@@ -88,6 +89,7 @@ require (
 	github.com/markbates/oncer v1.0.0 // indirect
 	github.com/markbates/safe v1.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
+	github.com/miguelmota/go-solidity-sha3 v0.1.1 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
