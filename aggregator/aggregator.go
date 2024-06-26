@@ -269,18 +269,23 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 						}
 					}
 
-					// If the batch is marked as Invalid in the DS we enforce retrieve the data from L1
-					if a.cfg.UseL1BatchData || a.currentStreamBatch.Type == datastream.BatchType_BATCH_TYPE_INVALID {
-						a.currentStreamBatch.BatchL2Data = virtualBatch.BatchL2Data
-					} else {
+					// Encode batch
+					if a.currentStreamBatch.Type != datastream.BatchType_BATCH_TYPE_INVALID {
 						batchl2Data, err = state.EncodeBatchV2(&a.currentStreamBatchRaw)
 						if err != nil {
 							log.Errorf("Error encoding batch: %v", err)
 							return err
 						}
+					}
+
+					// If the batch is marked as Invalid in the DS we enforce retrieve the data from L1
+					if a.cfg.UseL1BatchData || a.currentStreamBatch.Type == datastream.BatchType_BATCH_TYPE_INVALID {
+						a.currentStreamBatch.BatchL2Data = virtualBatch.BatchL2Data
+					} else {
 						a.currentStreamBatch.BatchL2Data = batchl2Data
 					}
 
+					// Compare BatchL2Data from L1 and DataStream
 					if common.Bytes2Hex(batchl2Data) != common.Bytes2Hex(virtualBatch.BatchL2Data) {
 						log.Warnf("BatchL2Data from L1 and data stream are different for batch %d", a.currentStreamBatch.BatchNumber)
 
@@ -1587,6 +1592,11 @@ func getWitness(batchNumber uint64, URL string, fullWitness bool) ([]byte, error
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// Check if the response is an error
+	if response.Error != nil {
+		return nil, fmt.Errorf("error from witness: %v", response.Error)
 	}
 
 	err = json.Unmarshal(response.Result, &witness)
