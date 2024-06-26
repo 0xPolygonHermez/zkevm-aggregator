@@ -1596,7 +1596,7 @@ func getWitness(batchNumber uint64, URL string, fullWitness bool) ([]byte, error
 
 	// Check if the response is an error
 	if response.Error != nil {
-		return nil, fmt.Errorf("error from witness: %v", response.Error)
+		return nil, fmt.Errorf("error from witness for batch %d: %v", batchNumber, response.Error)
 	}
 
 	err = json.Unmarshal(response.Result, &witness)
