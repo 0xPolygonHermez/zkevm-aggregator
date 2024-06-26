@@ -1583,17 +1583,14 @@ func getWitness(batchNumber uint64, URL string, fullWitness bool) ([]byte, error
 	var err error
 
 	hexBatchNumber := fmt.Sprintf("0x%x", batchNumber)
-
+	witnessType := "trimmed"
 	if fullWitness {
-		response, err = rpc.JSONRPCCall(URL, "zkevm_getBatchWitness", "1", hexBatchNumber, "full")
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		response, err = rpc.JSONRPCCall(URL, "zkevm_getBatchWitness", "batch-1", hexBatchNumber)
-		if err != nil {
-			return nil, err
-		}
+		witnessType = "full"
+	}
+
+	response, err = rpc.JSONRPCCall(URL, "zkevm_getBatchWitness", "1", hexBatchNumber, witnessType)
+	if err != nil {
+		return nil, err
 	}
 
 	// Check if the response is an error
