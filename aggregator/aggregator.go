@@ -1,7 +1,6 @@
 package aggregator
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -781,19 +780,6 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, prover proverInterface
 		finalProof.Public.NewLocalExitRoot = finalBatch.LocalExitRoot.Bytes()
 	}
 
-	// Sanity Check: state root from the proof must match the one from the final batch
-	finalBatch, _, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
-	}
-
-	if !bytes.Equal(finalProof.Public.NewStateRoot, finalBatch.StateRoot.Bytes()) {
-		for {
-			log.Errorf("State root from the proof [%#x] does not match the one from the batch [%#x]. HALTED", finalProof.Public.NewStateRoot, finalBatch.StateRoot.Bytes())
-			time.Sleep(a.cfg.RetryTime.Duration)
-		}
-	}
-
 	return finalProof, nil
 }
 
@@ -1094,7 +1080,7 @@ func (a *Aggregator) tryAggregateProofs(ctx context.Context, prover proverInterf
 	log.Infof("Proof ID for aggregated proof: %v", *proof.ProofID)
 	log = log.WithFields("proofId", *proof.ProofID)
 
-	recursiveProof, err := prover.WaitRecursiveProof(ctx, *proof.ProofID)
+	recursiveProof, _, err := prover.WaitRecursiveProof(ctx, *proof.ProofID)
 	if err != nil {
 		err = fmt.Errorf("failed to get aggregated proof from prover, %w", err)
 		log.Error(FirstToUpper(err.Error()))
@@ -1340,7 +1326,7 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 
 	log = log.WithFields("proofId", *proof.ProofID)
 
-	resGetProof, err := prover.WaitRecursiveProof(ctx, *proof.ProofID)
+	resGetProof, stateRoot, err := prover.WaitRecursiveProof(ctx, *proof.ProofID)
 	if err != nil {
 		err = fmt.Errorf("failed to get proof from prover, %w", err)
 		log.Error(FirstToUpper(err.Error()))
@@ -1348,6 +1334,14 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 	}
 
 	log.Info("Batch proof generated")
+
+	// Sanity Check: state root from the proof must match the one from the batch
+	if stateRoot != batchToProve.StateRoot {
+		for {
+			log.Errorf("State root from the proof [%s] does not match the one from the batch [%s]. HALTED", stateRoot.String(), batchToProve.StateRoot.String())
+			time.Sleep(a.cfg.RetryTime.Duration)
+		}
+	}
 
 	proof.Proof = resGetProof
 
