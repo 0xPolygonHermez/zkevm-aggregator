@@ -257,7 +257,7 @@ func (p *Prover) WaitRecursiveProof(ctx context.Context, proofID string) (string
 	if err != nil {
 		return "", common.Hash{}, err
 	}
-	stateRoot, err := GetStateRootFromProof(res.ResultString)
+	stateRoot, err := GetStateRootFromProof(res.Proof.(*GetProofResponse_RecursiveProof).RecursiveProof)
 	if err != nil {
 		return "", common.Hash{}, err
 	}
