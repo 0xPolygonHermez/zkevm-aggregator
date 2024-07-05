@@ -285,7 +285,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					}
 
 					// Compare BatchL2Data from L1 and DataStream
-					if common.Bytes2Hex(batchl2Data) != common.Bytes2Hex(virtualBatch.BatchL2Data) {
+					if common.Bytes2Hex(batchl2Data) != common.Bytes2Hex(virtualBatch.BatchL2Data) && a.currentStreamBatch.Type != datastream.BatchType_BATCH_TYPE_INJECTED {
 						log.Warnf("BatchL2Data from L1 and data stream are different for batch %d", a.currentStreamBatch.BatchNumber)
 
 						if a.currentStreamBatch.Type == datastream.BatchType_BATCH_TYPE_INVALID {
@@ -1080,7 +1080,7 @@ func (a *Aggregator) tryAggregateProofs(ctx context.Context, prover proverInterf
 	log.Infof("Proof ID for aggregated proof: %v", *proof.ProofID)
 	log = log.WithFields("proofId", *proof.ProofID)
 
-	recursiveProof, _, err := prover.WaitRecursiveProof(ctx, *proof.ProofID)
+	recursiveProof, _, err := prover.WaitRecursiveProof(ctx, *proof.ProofID, false)
 	if err != nil {
 		err = fmt.Errorf("failed to get aggregated proof from prover, %w", err)
 		log.Error(FirstToUpper(err.Error()))
@@ -1326,7 +1326,7 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 
 	log = log.WithFields("proofId", *proof.ProofID)
 
-	resGetProof, stateRoot, err := prover.WaitRecursiveProof(ctx, *proof.ProofID)
+	resGetProof, stateRoot, err := prover.WaitRecursiveProof(ctx, *proof.ProofID, a.cfg.BatchProofSanityCheckEnabled)
 	if err != nil {
 		err = fmt.Errorf("failed to get proof from prover, %w", err)
 		log.Error(FirstToUpper(err.Error()))
@@ -1336,7 +1336,7 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 	log.Info("Batch proof generated")
 
 	// Sanity Check: state root from the proof must match the one from the batch
-	if stateRoot != batchToProve.StateRoot {
+	if a.cfg.BatchProofSanityCheckEnabled && stateRoot != batchToProve.StateRoot {
 		log.Fatalf("State root from the proof does not match the expected for batch %d: Proof = [%s] Expected = [%s]", batchToProve.BatchNumber, stateRoot.String(), batchToProve.StateRoot.String())
 	}
 
