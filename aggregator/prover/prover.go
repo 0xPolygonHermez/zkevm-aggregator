@@ -259,9 +259,9 @@ func (p *Prover) WaitRecursiveProof(ctx context.Context, proofID string) (string
 		return "", common.Hash{}, err
 	}
 
-	sr, err := GetStateRootFromProof(res.Proof.(*GetProofResponse_FinalProof).FinalProof.GetPublic().String())
+	sr, err := GetStateRootFromProof(res.Proof.(*GetProofResponse_RecursiveProof).RecursiveProof)
 	if err != nil {
-		return "", common.Hash{}, err
+		log.Info("Recursive proof does not contain state root")
 	}
 
 	resProof := res.Proof.(*GetProofResponse_RecursiveProof)
