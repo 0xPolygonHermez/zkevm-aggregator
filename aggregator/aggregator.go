@@ -1443,7 +1443,6 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 				l1InfoTreeLeaf := leaves[l2blockRaw.IndexL1InfoTree]
 
 				// Calculate smt proof
-				log.Infof("Calling tree.ComputeMerkleProof")
 				smtProof, calculatedL1InfoRoot, err := tree.ComputeMerkleProof(l2blockRaw.IndexL1InfoTree, aLeaves)
 				if err != nil {
 					log.Errorf("Error computing merkle proof: %v", err)

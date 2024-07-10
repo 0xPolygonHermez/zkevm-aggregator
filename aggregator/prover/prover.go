@@ -259,7 +259,7 @@ func (p *Prover) WaitRecursiveProof(ctx context.Context, proofID string) (string
 		return "", common.Hash{}, err
 	}
 
-	sr, err := GetStateRootFromProof(res.Proof.(*GetProofResponse_RecursiveProof).RecursiveProof)
+	sr, err := GetStateRootFromProof(res.Proof.(*GetProofResponse_FinalProof).FinalProof.GetPublic().String())
 	if err != nil {
 		return "", common.Hash{}, err
 	}
@@ -349,6 +349,9 @@ func (p *Prover) call(req *AggregatorMessage) (*ProverMessage, error) {
 
 // GetStateRootFromProof returns the state root from the proof.
 func GetStateRootFromProof(proof string) (common.Hash, error) {
+	// Log received proof
+	log.Debugf("Received proof to get SR from: %s", proof)
+
 	type Publics struct {
 		Publics []string `mapstructure:"publics"`
 	}
