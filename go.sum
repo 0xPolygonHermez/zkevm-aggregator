@@ -45,8 +45,8 @@ github.com/0xPolygonHermez/zkevm-data-streamer v0.2.2 h1:XRMTk+W6vtJVGVjuEznfWyN
 github.com/0xPolygonHermez/zkevm-data-streamer v0.2.2/go.mod h1:0QkAXcFa92mFJrCbN3UPUJGJYes851yEgYHLONnaosE=
 github.com/0xPolygonHermez/zkevm-ethtx-manager v0.1.9 h1:vrAezzwTNke6NroDAltGh1k2AJ6ibmZPBsG0bCltbRc=
 github.com/0xPolygonHermez/zkevm-ethtx-manager v0.1.9/go.mod h1:pRqfLQVM3nbzdhy3buqjAgcVyNDKAXOHqTSgkwiKpic=
-github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.6.1 h1:pf0lvUJNl5/3AnpnFPvgaYTUoOydVUaqI0hyZGglI2E=
-github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.6.1/go.mod h1:3L6m4ZYs2tTTNhxMtq1KHSclxr7RmlZ3eWtOe8lsYsM=
+github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.6.2 h1:cY+O7RV/b9KCu0uf60OO/KSlkfLTc6bVmw/lBrV6FEM=
+github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.6.2/go.mod h1:3L6m4ZYs2tTTNhxMtq1KHSclxr7RmlZ3eWtOe8lsYsM=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/DATA-DOG/go-sqlmock v1.5.1 h1:FK6RCIUSfmbnI/imIICmboyQBkOckutaa6R5YYlLZyo=
