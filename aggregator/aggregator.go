@@ -1546,7 +1546,7 @@ func getWitness(batchNumber uint64, URL string, fullWitness bool) ([]byte, error
 		return nil, fmt.Errorf("error from witness for batch %d: %v", batchNumber, response.Error)
 	}
 
-	log.Infof("Witness for batch %d received in %v milisenconds", batchNumber, time.Since(start)*time.Millisecond)
+	log.Infof("Witness for batch %d received in %v", batchNumber, time.Since(start))
 
 	err = json.Unmarshal(response.Result, &witness)
 	if err != nil {
