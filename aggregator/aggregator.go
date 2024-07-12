@@ -1535,6 +1535,7 @@ func getWitness(batchNumber uint64, URL string, fullWitness bool) ([]byte, error
 		witnessType = "full"
 	}
 
+	start := time.Now()
 	response, err = rpc.JSONRPCCall(URL, "zkevm_getBatchWitness", batchNumber, witnessType)
 	if err != nil {
 		return nil, err
@@ -1544,6 +1545,8 @@ func getWitness(batchNumber uint64, URL string, fullWitness bool) ([]byte, error
 	if response.Error != nil {
 		return nil, fmt.Errorf("error from witness for batch %d: %v", batchNumber, response.Error)
 	}
+
+	log.Infof("Witness for batch %d received in %v milisenconds", batchNumber, time.Since(start)*time.Millisecond)
 
 	err = json.Unmarshal(response.Result, &witness)
 	if err != nil {
