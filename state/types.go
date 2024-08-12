@@ -68,3 +68,10 @@ type Proof struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
+
+// DBBatch struct is a wrapper for the state.Batch and its metadata
+type DBBatch struct {
+	Batch      Batch
+	Datastream []byte
+	Witness    []byte
+}

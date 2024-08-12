@@ -1,6 +1,7 @@
 package aggregator
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -79,6 +80,8 @@ type Aggregator struct {
 
 	finalProof     chan finalProofMsg
 	verifyingProof bool
+
+	witnessRetrievalChan chan *state.DBBatch
 
 	srv  *grpc.Server
 	ctx  context.Context
@@ -176,6 +179,7 @@ func New(
 		currentBatchStreamData:  []byte{},
 		aggLayerClient:          aggLayerClient,
 		sequencerPrivateKey:     sequencerPrivateKey,
+		witnessRetrievalChan:    make(chan *state.DBBatch, cfg.MaxWitnessRetrievalWorkers),
 	}
 
 	// Set function to handle the batches from the data stream
@@ -185,17 +189,49 @@ func New(
 	return a, nil
 }
 
+func (a *Aggregator) retrieveWitnesses() {
+	select {
+	case <-a.ctx.Done():
+		return
+	case dbBatch := <-a.witnessRetrievalChan:
+		go a.retrieveWitness(dbBatch)
+	}
+}
+
+func (a *Aggregator) retrieveWitness(dbBatch *state.DBBatch) {
+	var (
+		success bool
+		err     error
+	)
+
+	for !success {
+		// Get Witness
+		dbBatch.Witness, err = getWitness(a.currentStreamBatch.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
+		if err != nil {
+			log.Errorf("Failed to get witness for batch %d, err: %v", a.currentStreamBatch.BatchNumber, err)
+			time.Sleep(a.cfg.RetryTime.Duration)
+			continue
+		}
+
+		err = a.state.AddBatch(a.ctx, dbBatch, nil)
+		if err != nil {
+			log.Errorf("Error adding batch: %v", err)
+			time.Sleep(a.cfg.RetryTime.Duration)
+			continue
+		}
+
+		success = true
+	}
+}
+
 func (a *Aggregator) handleReorg(reorgData synchronizer.ReorgExecutionResult) {
 	log.Warnf("Reorg detected, reorgData: %+v", reorgData)
-
-	ctx := context.Background()
-
 	// Get new latest verified batch number
-	lastVBatchNumber, err := a.l1Syncr.GetLastestVirtualBatchNumber(ctx)
+	lastVBatchNumber, err := a.l1Syncr.GetLastestVirtualBatchNumber(a.ctx)
 	if err != nil {
 		log.Errorf("Error getting last virtual batch number: %v", err)
 	} else {
-		err = a.state.DeleteBatchesNewerThanBatchNumber(ctx, lastVBatchNumber, nil)
+		err = a.state.DeleteBatchesNewerThanBatchNumber(a.ctx, lastVBatchNumber, nil)
 		if err != nil {
 			log.Errorf("Error deleting batches newer than batch number %d: %v", lastVBatchNumber, err)
 		}
@@ -210,7 +246,6 @@ func (a *Aggregator) handleReorg(reorgData synchronizer.ReorgExecutionResult) {
 }
 
 func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, client *datastreamer.StreamClient, server *datastreamer.StreamServer) error {
-	ctx := context.Background()
 	forcedBlockhashL1 := common.Hash{}
 
 	if !a.halted.Load() {
@@ -251,7 +286,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					var batchl2Data []byte
 
 					// Get batchl2Data from L1
-					virtualBatch, err := a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+					virtualBatch, err := a.l1Syncr.GetVirtualBatchByBatchNumber(a.ctx, a.currentStreamBatch.BatchNumber)
 					if err != nil && !errors.Is(err, entities.ErrNotFound) {
 						log.Errorf("Error getting virtual batch: %v", err)
 						return err
@@ -260,7 +295,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					for errors.Is(err, entities.ErrNotFound) {
 						log.Debug("Waiting for virtual batch to be available")
 						time.Sleep(a.cfg.RetryTime.Duration)
-						virtualBatch, err = a.l1Syncr.GetVirtualBatchByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+						virtualBatch, err = a.l1Syncr.GetVirtualBatchByBatchNumber(a.ctx, a.currentStreamBatch.BatchNumber)
 
 						if err != nil && !errors.Is(err, entities.ErrNotFound) {
 							log.Errorf("Error getting virtual batch: %v", err)
@@ -297,7 +332,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					}
 
 					// Ger L1InfoRoot
-					sequence, err := a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+					sequence, err := a.l1Syncr.GetSequenceByBatchNumber(a.ctx, a.currentStreamBatch.BatchNumber)
 					if err != nil {
 						log.Errorf("Error getting sequence: %v", err)
 						return err
@@ -306,7 +341,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					for sequence == nil {
 						log.Debug("Waiting for sequence to be available")
 						time.Sleep(a.cfg.RetryTime.Duration)
-						sequence, err = a.l1Syncr.GetSequenceByBatchNumber(ctx, a.currentStreamBatch.BatchNumber)
+						sequence, err = a.l1Syncr.GetSequenceByBatchNumber(a.ctx, a.currentStreamBatch.BatchNumber)
 						if err != nil {
 							log.Errorf("Error getting sequence: %v", err)
 							return err
@@ -317,7 +352,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					a.currentStreamBatch.Timestamp = sequence.Timestamp
 
 					// Calculate Acc Input Hash
-					oldBatch, _, _, err := a.state.GetBatch(ctx, a.currentStreamBatch.BatchNumber-1, nil)
+					oldDBBatch, err := a.state.GetBatch(a.ctx, a.currentStreamBatch.BatchNumber-1, nil)
 					if err != nil {
 						log.Errorf("Error getting batch %d: %v", a.currentStreamBatch.BatchNumber-1, err)
 						return err
@@ -325,7 +360,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 					// Injected Batch
 					if a.currentStreamBatch.BatchNumber == 1 {
-						l1Block, err := a.l1Syncr.GetL1BlockByNumber(ctx, virtualBatch.BlockNumber)
+						l1Block, err := a.l1Syncr.GetL1BlockByNumber(a.ctx, virtualBatch.BlockNumber)
 						if err != nil {
 							log.Errorf("Error getting L1 block: %v", err)
 							return err
@@ -335,7 +370,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 						a.currentStreamBatch.L1InfoRoot = a.currentStreamBatch.GlobalExitRoot
 					}
 
-					accInputHash, err := accinputhash.CalculateAccInputHash(oldBatch.AccInputHash, a.currentStreamBatch.BatchL2Data, a.currentStreamBatch.L1InfoRoot, uint64(a.currentStreamBatch.Timestamp.Unix()), a.currentStreamBatch.Coinbase, forcedBlockhashL1)
+					accInputHash, err := accinputhash.CalculateAccInputHash(oldDBBatch.Batch.AccInputHash, a.currentStreamBatch.BatchL2Data, a.currentStreamBatch.L1InfoRoot, uint64(a.currentStreamBatch.Timestamp.Unix()), a.currentStreamBatch.Coinbase, forcedBlockhashL1)
 					if err != nil {
 						log.Errorf("Error calculating acc input hash: %v", err)
 						return err
@@ -343,18 +378,13 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 					a.currentStreamBatch.AccInputHash = accInputHash
 
-					// Get Witness
-					witness, err := getWitness(a.currentStreamBatch.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
-					if err != nil {
-						log.Errorf("Failed to get witness for batch %d, err: %v", a.currentStreamBatch.BatchNumber, err)
-						return err
+					dbBatch := state.DBBatch{
+						Batch:      a.currentStreamBatch,
+						Datastream: a.currentBatchStreamData,
+						Witness:    []byte{},
 					}
 
-					err = a.state.AddBatch(ctx, &a.currentStreamBatch, a.currentBatchStreamData, witness, nil)
-					if err != nil {
-						log.Errorf("Error adding batch: %v", err)
-						return err
-					}
+					a.witnessRetrievalChan <- &dbBatch
 				}
 
 				// Reset current batch data
@@ -473,8 +503,8 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	log.Infof("Starting AccInputHash:%v", accInputHash.String())
 
 	// Store Acc Input Hash of the latest verified batch
-	dummyBatch := state.Batch{BatchNumber: lastVerifiedBatchNumber, AccInputHash: *accInputHash}
-	err = a.state.AddBatch(ctx, &dummyBatch, []byte{0}, []byte{0}, nil)
+	dummyDBBatch := state.DBBatch{Batch: state.Batch{BatchNumber: lastVerifiedBatchNumber, AccInputHash: *accInputHash}, Datastream: []byte{0}, Witness: []byte{0}}
+	err = a.state.AddBatch(ctx, &dummyDBBatch, nil)
 	if err != nil {
 		return err
 	}
@@ -492,6 +522,9 @@ func (a *Aggregator) Start(ctx context.Context) error {
 			log.Fatalf("Failed to synchronize from L1: %v", err)
 		}
 	}()
+
+	// Witness retrieval workers
+	go a.retrieveWitnesses()
 
 	// Start stream client
 	err = a.streamClient.Start()
@@ -631,7 +664,7 @@ func (a *Aggregator) sendFinalProof() {
 
 			a.startProofVerification()
 
-			finalBatch, _, _, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
+			finalDBBatch, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
 			if err != nil {
 				log.Errorf("Failed to retrieve batch with number [%d]: %v", proof.BatchNumberFinal, err)
 				a.endProofVerification()
@@ -640,8 +673,8 @@ func (a *Aggregator) sendFinalProof() {
 
 			inputs := ethmanTypes.FinalProofInputs{
 				FinalProof:       msg.finalProof,
-				NewLocalExitRoot: finalBatch.LocalExitRoot.Bytes(),
-				NewStateRoot:     finalBatch.StateRoot.Bytes(),
+				NewLocalExitRoot: finalDBBatch.Batch.LocalExitRoot.Bytes(),
+				NewStateRoot:     finalDBBatch.Batch.StateRoot.Bytes(),
 			}
 
 			switch a.cfg.SettlementBackend {
@@ -777,14 +810,27 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, prover proverInterface
 	if string(finalProof.Public.NewStateRoot) == mockedStateRoot && string(finalProof.Public.NewLocalExitRoot) == mockedLocalExitRoot {
 		// This local exit root and state root come from the mock
 		// prover, use the one captured by the executor instead
-		finalBatch, _, _, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
+		finalDBBatch, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
 		}
 		log.Warnf("NewLocalExitRoot and NewStateRoot look like a mock values, using values from executor instead: LER: %v, SR: %v",
-			finalBatch.LocalExitRoot.TerminalString(), finalBatch.StateRoot.TerminalString())
-		finalProof.Public.NewStateRoot = finalBatch.StateRoot.Bytes()
-		finalProof.Public.NewLocalExitRoot = finalBatch.LocalExitRoot.Bytes()
+			finalDBBatch.Batch.LocalExitRoot.TerminalString(), finalDBBatch.Batch.StateRoot.TerminalString())
+		finalProof.Public.NewStateRoot = finalDBBatch.Batch.StateRoot.Bytes()
+		finalProof.Public.NewLocalExitRoot = finalDBBatch.Batch.LocalExitRoot.Bytes()
+	}
+
+	// Sanity Check: state root from the proof must match the one from the final batch
+	finalDBBatch, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
+	}
+
+	if !bytes.Equal(finalProof.Public.NewStateRoot, finalDBBatch.Batch.StateRoot.Bytes()) {
+		for {
+			log.Errorf("State root from the final proof [%#x] does not match the one from the batch [%#x]. HALTED", finalProof.Public.NewStateRoot, finalDBBatch.Batch.StateRoot.Bytes())
+			time.Sleep(a.cfg.RetryTime.Duration)
+		}
 	}
 
 	return finalProof, nil
@@ -1227,20 +1273,24 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 		ToBatchNumber:   sequence.ToBatchNumber,
 	}
 
+	// Check if the batch is already in the DB
+	dbBatch, err := a.state.GetBatch(ctx, batchNumberToVerify, nil)
+	if err != nil {
+		if errors.Is(err, state.ErrNotFound) {
+			log.Infof("Batch (%d) is not yet in DB", batchNumberToVerify)
+		}
+		return nil, nil, nil, err
+	}
+
 	err = a.state.AddSequence(ctx, stateSequence, nil)
 	if err != nil {
 		log.Infof("Error storing sequence for batch %d", batchNumberToVerify)
 		return nil, nil, nil, err
 	}
 
-	batch, _, witness, err := a.state.GetBatch(ctx, batchNumberToVerify, nil)
-	if err != nil {
-		return batch, witness, nil, err
-	}
-
 	// All the data required to generate a proof is ready
-	log.Infof("Found virtual batch %d pending to generate proof", batch.BatchNumber)
-	log = log.WithFields("batch", batch.BatchNumber)
+	log.Infof("Found virtual batch %d pending to generate proof", dbBatch.Batch.BatchNumber)
+	log = log.WithFields("batch", dbBatch.Batch.BatchNumber)
 
 	log.Info("Checking profitability to aggregate batch")
 
@@ -1258,8 +1308,8 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 
 	now := time.Now().Round(time.Microsecond)
 	proof := &state.Proof{
-		BatchNumber:      batch.BatchNumber,
-		BatchNumberFinal: batch.BatchNumber,
+		BatchNumber:      dbBatch.Batch.BatchNumber,
+		BatchNumberFinal: dbBatch.Batch.BatchNumber,
 		Prover:           &proverName,
 		ProverID:         &proverID,
 		GeneratingSince:  &now,
@@ -1272,7 +1322,7 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 		return nil, nil, nil, err
 	}
 
-	return batch, witness, proof, nil
+	return &dbBatch.Batch, dbBatch.Witness, proof, nil
 }
 
 func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInterface) (bool, error) {
@@ -1344,7 +1394,12 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 
 	// Sanity Check: state root from the proof must match the one from the batch
 	if a.cfg.BatchProofSanityCheckEnabled && (stateRoot != common.Hash{}) && (stateRoot != batchToProve.StateRoot) {
-		log.Fatalf("State root from the proof does not match the expected for batch %d: Proof = [%s] Expected = [%s]", batchToProve.BatchNumber, stateRoot.String(), batchToProve.StateRoot.String())
+		for {
+			log.Errorf("State root from the proof does not match the expected for batch %d: Proof = [%s] Expected = [%s]", batchToProve.BatchNumber, stateRoot.String(), batchToProve.StateRoot.String())
+			time.Sleep(a.cfg.RetryTime.Duration)
+		}
+	} else {
+		log.Infof("State root sanity check for batch %d passed", batchToProve.BatchNumber)
 	}
 
 	proof.Proof = resGetProof
@@ -1499,7 +1554,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 	}
 
 	// Get Old Acc Input Hash
-	oldBatch, _, _, err := a.state.GetBatch(ctx, batchToVerify.BatchNumber-1, nil)
+	oldDBBatch, err := a.state.GetBatch(ctx, batchToVerify.BatchNumber-1, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1507,7 +1562,7 @@ func (a *Aggregator) buildInputProver(ctx context.Context, batchToVerify *state.
 	inputProver := &prover.StatelessInputProver{
 		PublicInputs: &prover.StatelessPublicInputs{
 			Witness:           witness,
-			OldAccInputHash:   oldBatch.AccInputHash.Bytes(),
+			OldAccInputHash:   oldDBBatch.Batch.AccInputHash.Bytes(),
 			OldBatchNum:       batchToVerify.BatchNumber - 1,
 			ChainId:           batchToVerify.ChainID,
 			ForkId:            batchToVerify.ForkID,

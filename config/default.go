@@ -22,6 +22,7 @@ UseFullWitness = false
 SettlementBackend = "l1"
 AggLayerTxTimeout = "5m"
 AggLayerURL = ""
+MaxWitnessRetrievalWorkers = 2
 SequencerPrivateKey = {}
 	[Aggregator.DB]
 		Name = "aggregator_db"

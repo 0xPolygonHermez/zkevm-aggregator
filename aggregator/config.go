@@ -143,6 +143,9 @@ type Config struct {
 
 	// AggLayerURL url of the agglayer service
 	AggLayerURL string `mapstructure:"AggLayerURL"`
+
+	// MaxWitnessRetrievalWorkers is the maximum number of workers that will be used to retrieve the witness
+	MaxWitnessRetrievalWorkers int `mapstructure:"MaxWitnessRetrievalWorkers"`
 }
 
 // StreamClientCfg contains the data streamer's configuration properties
