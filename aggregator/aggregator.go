@@ -82,7 +82,7 @@ type Aggregator struct {
 	verifyingProof bool
 
 	activeWitnessRetrievalWorkers      int
-	witnessRetrievalChan               chan *state.DBBatch
+	witnessRetrievalChan               chan state.DBBatch
 	activeWitnessRetrievalWorkersMutex sync.Mutex
 
 	srv  *grpc.Server
@@ -181,7 +181,7 @@ func New(
 		currentBatchStreamData:             []byte{},
 		aggLayerClient:                     aggLayerClient,
 		sequencerPrivateKey:                sequencerPrivateKey,
-		witnessRetrievalChan:               make(chan *state.DBBatch, cfg.MaxWitnessRetrievalWorkers),
+		witnessRetrievalChan:               make(chan state.DBBatch),
 		activeWitnessRetrievalWorkers:      0,
 		activeWitnessRetrievalWorkersMutex: sync.Mutex{},
 	}
@@ -220,22 +220,21 @@ func (a *Aggregator) retrieveWitnesses() {
 	}
 }
 
-func (a *Aggregator) retrieveWitness(dbBatch *state.DBBatch) {
-	var (
-		success bool
-		err     error
-	)
+func (a *Aggregator) retrieveWitness(dbBatch state.DBBatch) {
+	var success bool
 
 	for !success {
 		// Get Witness
-		dbBatch.Witness, err = getWitness(a.currentStreamBatch.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
+		witness, err := getWitness(a.currentStreamBatch.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
 		if err != nil {
 			log.Errorf("Failed to get witness for batch %d, err: %v", a.currentStreamBatch.BatchNumber, err)
 			time.Sleep(a.cfg.RetryTime.Duration)
 			continue
 		}
 
-		err = a.state.AddBatch(a.ctx, dbBatch, nil)
+		dbBatch.Witness = witness
+
+		err = a.state.AddBatch(a.ctx, &dbBatch, nil)
 		if err != nil {
 			log.Errorf("Error adding batch: %v", err)
 			time.Sleep(a.cfg.RetryTime.Duration)
@@ -432,7 +431,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 
 					// Retrieve the witness
 					if dbBatch.Witness == nil || len(dbBatch.Witness) == 0 {
-						a.witnessRetrievalChan <- &dbBatch
+						a.witnessRetrievalChan <- dbBatch
 					}
 				}
 
