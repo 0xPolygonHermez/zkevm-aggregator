@@ -1294,7 +1294,7 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 	}
 
 	// Check if the witness is already in the DB
-	if dbBatch.Witness == nil {
+	if dbBatch.Witness == nil || len(dbBatch.Witness) == 0 {
 		log.Infof("Witness for batch %d is not yet in DB", batchNumberToVerify)
 		return nil, nil, nil, state.ErrNotFound
 	}
