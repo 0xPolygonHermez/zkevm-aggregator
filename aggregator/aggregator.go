@@ -381,7 +381,14 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					dbBatch := state.DBBatch{
 						Batch:      a.currentStreamBatch,
 						Datastream: a.currentBatchStreamData,
-						Witness:    []byte{},
+						Witness:    nil,
+					}
+
+					// Store batch in the DB and retrieve witness
+					err = a.state.AddBatch(a.ctx, &dbBatch, nil)
+					if err != nil {
+						log.Errorf("Error adding batch: %v", err)
+						return err
 					}
 
 					a.witnessRetrievalChan <- &dbBatch
@@ -1280,6 +1287,12 @@ func (a *Aggregator) getAndLockBatchToProve(ctx context.Context, prover proverIn
 			log.Infof("Batch (%d) is not yet in DB", batchNumberToVerify)
 		}
 		return nil, nil, nil, err
+	}
+
+	// Check if the witness is already in the DB
+	if dbBatch.Witness == nil {
+		log.Infof("Witness for batch %d is not yet in DB", batchNumberToVerify)
+		return nil, nil, nil, state.ErrNotFound
 	}
 
 	err = a.state.AddSequence(ctx, stateSequence, nil)
