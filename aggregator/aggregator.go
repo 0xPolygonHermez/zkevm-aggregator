@@ -201,11 +201,20 @@ func (a *Aggregator) retrieveWitnesses() {
 		case <-a.ctx.Done():
 			return
 		case dbBatch := <-a.witnessRetrievalChan:
+			currentWorkers := 0
 			a.activeWitnessRetrievalWorkersMutex.Lock()
-			if a.activeWitnessRetrievalWorkers < a.cfg.MaxWitnessRetrievalWorkers {
-				go a.retrieveWitness(dbBatch)
-				a.activeWitnessRetrievalWorkers++
+			currentWorkers = a.activeWitnessRetrievalWorkers
+			a.activeWitnessRetrievalWorkersMutex.Unlock()
+
+			for currentWorkers >= a.cfg.MaxWitnessRetrievalWorkers {
+				time.Sleep(a.cfg.RetryTime.Duration)
+				a.activeWitnessRetrievalWorkersMutex.Lock()
+				currentWorkers = a.activeWitnessRetrievalWorkers
+				a.activeWitnessRetrievalWorkersMutex.Unlock()
 			}
+			go a.retrieveWitness(dbBatch)
+			a.activeWitnessRetrievalWorkersMutex.Lock()
+			a.activeWitnessRetrievalWorkers++
 			a.activeWitnessRetrievalWorkersMutex.Unlock()
 		}
 	}
