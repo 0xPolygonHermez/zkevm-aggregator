@@ -410,14 +410,30 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 						Witness:    nil,
 					}
 
-					// Store batch in the DB and retrieve witness
+					// Check if the batch is already in the DB to keep its witness
+					wDBBatch, err := a.state.GetBatch(a.ctx, a.currentStreamBatch.BatchNumber, nil)
+					if err != nil {
+						if !errors.Is(err, state.ErrNotFound) {
+							log.Errorf("Error getting batch %d: %v", a.currentStreamBatch.BatchNumber, err)
+							return err
+						}
+					}
+
+					if wDBBatch != nil && wDBBatch.Witness != nil && len(wDBBatch.Witness) > 0 {
+						dbBatch.Witness = wDBBatch.Witness
+					}
+
+					// Store batch in the DB
 					err = a.state.AddBatch(a.ctx, &dbBatch, nil)
 					if err != nil {
 						log.Errorf("Error adding batch: %v", err)
 						return err
 					}
 
-					a.witnessRetrievalChan <- &dbBatch
+					// Retrieve the witness
+					if dbBatch.Witness == nil || len(dbBatch.Witness) == 0 {
+						a.witnessRetrievalChan <- &dbBatch
+					}
 				}
 
 				// Reset current batch data
@@ -1628,6 +1644,8 @@ func getWitness(batchNumber uint64, URL string, fullWitness bool) ([]byte, error
 	if fullWitness {
 		witnessType = "full"
 	}
+
+	log.Infof("Requesting witness for batch %d of type %s", batchNumber, witnessType)
 
 	start := time.Now()
 	response, err = rpc.JSONRPCCall(URL, "zkevm_getBatchWitness", batchNumber, witnessType)
