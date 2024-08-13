@@ -182,6 +182,8 @@ func New(
 		witnessRetrievalChan:    make(chan *state.DBBatch, cfg.MaxWitnessRetrievalWorkers),
 	}
 
+	log.Infof("MaxWitnessRetrievalWorkers set to %d", cfg.MaxWitnessRetrievalWorkers)
+
 	// Set function to handle the batches from the data stream
 	a.streamClient.SetProcessEntryFunc(a.handleReceivedDataStream)
 	a.l1Syncr.SetCallbackOnReorgDone(a.handleReorg)
@@ -190,11 +192,13 @@ func New(
 }
 
 func (a *Aggregator) retrieveWitnesses() {
-	select {
-	case <-a.ctx.Done():
-		return
-	case dbBatch := <-a.witnessRetrievalChan:
-		go a.retrieveWitness(dbBatch)
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		case dbBatch := <-a.witnessRetrievalChan:
+			go a.retrieveWitness(dbBatch)
+		}
 	}
 }
 
