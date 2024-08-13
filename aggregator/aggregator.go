@@ -46,6 +46,10 @@ const (
 	mockedLocalExitRoot = "0x17c04c3760510b48c6012742c540a81aba4bca2f78b9d14bfd2f123e2e53ea3e"
 )
 
+var (
+	busyError = errors.New("witness server is busy")
+)
+
 type finalProofMsg struct {
 	proverName     string
 	proverID       string
@@ -195,22 +199,26 @@ func (a *Aggregator) retrieveWitness() {
 	var success bool
 	for {
 		dbBatch := <-a.witnessRetrievalChan
+	inner:
 		for !success {
+			var err error
 			// Get Witness
-			witness, err := getWitness(dbBatch.Batch.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
+			dbBatch.Witness, err = getWitness(dbBatch.Batch.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
 			if err != nil {
-				log.Errorf("Failed to get witness for batch %d, err: %v", dbBatch.Batch.BatchNumber, err)
+				if err == busyError {
+					log.Warnf("Witness server is busy, retrying in %v", a.cfg.RetryTime.Duration)
+				} else {
+					log.Errorf("Failed to get witness for batch %d, err: %v", dbBatch.Batch.BatchNumber, err)
+				}
 				time.Sleep(a.cfg.RetryTime.Duration)
-				continue
+				continue inner
 			}
-
-			dbBatch.Witness = witness
 
 			err = a.state.AddBatch(a.ctx, &dbBatch, nil)
 			if err != nil {
 				log.Errorf("Error adding batch: %v", err)
 				time.Sleep(a.cfg.RetryTime.Duration)
-				continue
+				continue inner
 			}
 			success = true
 		}
@@ -1626,6 +1634,9 @@ func getWitness(batchNumber uint64, URL string, fullWitness bool) ([]byte, error
 
 	// Check if the response is an error
 	if response.Error != nil {
+		if response.Error.Message == "busy" {
+			return nil, busyError
+		}
 		return nil, fmt.Errorf("error from witness for batch %d: %v", batchNumber, response.Error)
 	}
 
