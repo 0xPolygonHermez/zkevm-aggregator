@@ -196,12 +196,12 @@ func New(
 }
 
 func (a *Aggregator) retrieveWitnesses() {
+	currentWorkers := 0
 	for {
 		select {
 		case <-a.ctx.Done():
 			return
 		case dbBatch := <-a.witnessRetrievalChan:
-			currentWorkers := 0
 			a.activeWitnessRetrievalWorkersMutex.Lock()
 			currentWorkers = a.activeWitnessRetrievalWorkers
 			a.activeWitnessRetrievalWorkersMutex.Unlock()
@@ -212,10 +212,10 @@ func (a *Aggregator) retrieveWitnesses() {
 				currentWorkers = a.activeWitnessRetrievalWorkers
 				a.activeWitnessRetrievalWorkersMutex.Unlock()
 			}
-			go a.retrieveWitness(dbBatch)
 			a.activeWitnessRetrievalWorkersMutex.Lock()
 			a.activeWitnessRetrievalWorkers++
 			a.activeWitnessRetrievalWorkersMutex.Unlock()
+			go a.retrieveWitness(dbBatch)
 		}
 	}
 }
