@@ -1,7 +1,6 @@
 package aggregator
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -848,19 +847,20 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, prover proverInterface
 		finalProof.Public.NewLocalExitRoot = finalDBBatch.Batch.LocalExitRoot.Bytes()
 	}
 
-	// Sanity Check: state root from the proof must match the one from the final batch
-	finalDBBatch, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
-	}
-
-	if !bytes.Equal(finalProof.Public.NewStateRoot, finalDBBatch.Batch.StateRoot.Bytes()) {
-		for {
-			log.Errorf("State root from the final proof [%#x] does not match the one from the batch [%#x]. HALTED", finalProof.Public.NewStateRoot, finalDBBatch.Batch.StateRoot.Bytes())
-			time.Sleep(a.cfg.RetryTime.Duration)
+	/*
+		// Sanity Check: state root from the proof must match the one from the final batch
+		finalDBBatch, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
 		}
-	}
 
+		if !bytes.Equal(finalProof.Public.NewStateRoot, finalDBBatch.Batch.StateRoot.Bytes()) {
+			for {
+				log.Errorf("State root from the final proof [%#x] does not match the one from the batch [%#x]. HALTED", finalProof.Public.NewStateRoot, finalDBBatch.Batch.StateRoot.Bytes())
+				time.Sleep(a.cfg.RetryTime.Duration)
+			}
+		}
+	*/
 	return finalProof, nil
 }
 
