@@ -221,9 +221,9 @@ func (a *Aggregator) retrieveWitness(dbBatch state.DBBatch) {
 
 	for !success {
 		// Get Witness
-		witness, err := getWitness(a.currentStreamBatch.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
+		witness, err := getWitness(dbBatch.Batch.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
 		if err != nil {
-			log.Errorf("Failed to get witness for batch %d, err: %v", a.currentStreamBatch.BatchNumber, err)
+			log.Errorf("Failed to get witness for batch %d, err: %v", dbBatch.Batch.BatchNumber, err)
 			time.Sleep(a.cfg.RetryTime.Duration)
 			continue
 		}
