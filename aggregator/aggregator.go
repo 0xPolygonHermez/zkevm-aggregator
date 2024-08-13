@@ -81,9 +81,7 @@ type Aggregator struct {
 	finalProof     chan finalProofMsg
 	verifyingProof bool
 
-	activeWitnessRetrievalWorkers      int
-	witnessRetrievalChan               chan state.DBBatch
-	activeWitnessRetrievalWorkersMutex sync.Mutex
+	witnessRetrievalChan chan state.DBBatch
 
 	srv  *grpc.Server
 	ctx  context.Context
@@ -167,23 +165,21 @@ func New(
 	}
 
 	a := &Aggregator{
-		cfg:                                cfg,
-		state:                              stateInterface,
-		etherman:                           etherman,
-		ethTxManager:                       ethTxManager,
-		streamClient:                       streamClient,
-		l1Syncr:                            l1Syncr,
-		profitabilityChecker:               profitabilityChecker,
-		stateDBMutex:                       &sync.Mutex{},
-		timeSendFinalProofMutex:            &sync.RWMutex{},
-		timeCleanupLockedProofs:            cfg.CleanupLockedProofsInterval,
-		finalProof:                         make(chan finalProofMsg),
-		currentBatchStreamData:             []byte{},
-		aggLayerClient:                     aggLayerClient,
-		sequencerPrivateKey:                sequencerPrivateKey,
-		witnessRetrievalChan:               make(chan state.DBBatch),
-		activeWitnessRetrievalWorkers:      0,
-		activeWitnessRetrievalWorkersMutex: sync.Mutex{},
+		cfg:                     cfg,
+		state:                   stateInterface,
+		etherman:                etherman,
+		ethTxManager:            ethTxManager,
+		streamClient:            streamClient,
+		l1Syncr:                 l1Syncr,
+		profitabilityChecker:    profitabilityChecker,
+		stateDBMutex:            &sync.Mutex{},
+		timeSendFinalProofMutex: &sync.RWMutex{},
+		timeCleanupLockedProofs: cfg.CleanupLockedProofsInterval,
+		finalProof:              make(chan finalProofMsg),
+		currentBatchStreamData:  []byte{},
+		aggLayerClient:          aggLayerClient,
+		sequencerPrivateKey:     sequencerPrivateKey,
+		witnessRetrievalChan:    make(chan state.DBBatch),
 	}
 
 	log.Infof("MaxWitnessRetrievalWorkers set to %d", cfg.MaxWitnessRetrievalWorkers)
@@ -195,54 +191,32 @@ func New(
 	return a, nil
 }
 
-func (a *Aggregator) retrieveWitnesses() {
-	currentWorkers := 0
+func (a *Aggregator) retrieveWitness() {
+	var success bool
 	for {
 		dbBatch := <-a.witnessRetrievalChan
-		a.activeWitnessRetrievalWorkersMutex.Lock()
-		currentWorkers = a.activeWitnessRetrievalWorkers
-		a.activeWitnessRetrievalWorkersMutex.Unlock()
+		for !success {
+			// Get Witness
+			witness, err := getWitness(dbBatch.Batch.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
+			if err != nil {
+				log.Errorf("Failed to get witness for batch %d, err: %v", dbBatch.Batch.BatchNumber, err)
+				time.Sleep(a.cfg.RetryTime.Duration)
+				continue
+			}
 
-		for currentWorkers >= a.cfg.MaxWitnessRetrievalWorkers {
-			time.Sleep(a.cfg.RetryTime.Duration)
-			a.activeWitnessRetrievalWorkersMutex.Lock()
-			currentWorkers = a.activeWitnessRetrievalWorkers
-			a.activeWitnessRetrievalWorkersMutex.Unlock()
+			dbBatch.Witness = witness
+
+			err = a.state.AddBatch(a.ctx, &dbBatch, nil)
+			if err != nil {
+				log.Errorf("Error adding batch: %v", err)
+				time.Sleep(a.cfg.RetryTime.Duration)
+				continue
+			}
+			success = true
 		}
-		a.activeWitnessRetrievalWorkersMutex.Lock()
-		a.activeWitnessRetrievalWorkers++
-		a.activeWitnessRetrievalWorkersMutex.Unlock()
-		go a.retrieveWitness(dbBatch)
+
+		success = false
 	}
-}
-
-func (a *Aggregator) retrieveWitness(dbBatch state.DBBatch) {
-	var success bool
-
-	for !success {
-		// Get Witness
-		witness, err := getWitness(dbBatch.Batch.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
-		if err != nil {
-			log.Errorf("Failed to get witness for batch %d, err: %v", dbBatch.Batch.BatchNumber, err)
-			time.Sleep(a.cfg.RetryTime.Duration)
-			continue
-		}
-
-		dbBatch.Witness = witness
-
-		err = a.state.AddBatch(a.ctx, &dbBatch, nil)
-		if err != nil {
-			log.Errorf("Error adding batch: %v", err)
-			time.Sleep(a.cfg.RetryTime.Duration)
-			continue
-		}
-
-		success = true
-	}
-
-	a.activeWitnessRetrievalWorkersMutex.Lock()
-	a.activeWitnessRetrievalWorkers--
-	a.activeWitnessRetrievalWorkersMutex.Unlock()
 }
 
 func (a *Aggregator) handleReorg(reorgData synchronizer.ReorgExecutionResult) {
@@ -568,7 +542,9 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	}()
 
 	// Witness retrieval workers
-	go a.retrieveWitnesses()
+	for i := 0; i < a.cfg.MaxWitnessRetrievalWorkers; i++ {
+		go a.retrieveWitness()
+	}
 
 	// Start stream client
 	err = a.streamClient.Start()
