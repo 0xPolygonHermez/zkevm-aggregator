@@ -264,12 +264,12 @@ func (p *Prover) WaitRecursiveProof(ctx context.Context, proofID string) (string
 		return "", common.Hash{}, err
 	}
 
-	sr, err := GetStateRootFromProof(res.Proof.(*GetProofResponse_RecursiveProof).RecursiveProof)
+	resProof := res.Proof.(*GetProofResponse_RecursiveProof)
+	sr, err := GetStateRootFromProof(resProof.RecursiveProof)
 	if err != nil {
-		log.Info("Recursive proof does not contain state root")
+		log.Errorf("Error getting state root from proof: %v", err)
 	}
 
-	resProof := res.Proof.(*GetProofResponse_RecursiveProof)
 	return resProof.RecursiveProof, sr, nil
 }
 
