@@ -264,7 +264,7 @@ func (p *Prover) WaitRecursiveProof(ctx context.Context, proofID string) (string
 		return "", common.Hash{}, err
 	}
 
-	log.Infof("Received proof: %s", res.GetRecursiveProof())
+	log.Infof("Received proof: %v", res.GetProof())
 	resProof := res.Proof.(*GetProofResponse_RecursiveProof)
 
 	sr, err := GetStateRootFromProof(res.GetRecursiveProof())
@@ -319,7 +319,6 @@ func (p *Prover) waitProof(ctx context.Context, proofID string) (*GetProofRespon
 					return nil, fmt.Errorf("failed to get proof ID: %s, %w, prover response: %s",
 						proofID, ErrUnspecified, msg.GetProofResponse.String())
 				case GetProofResponse_RESULT_COMPLETED_OK:
-					log.Info("*** Proof generation completed: %v", msg.GetProofResponse.GetProof())
 					return msg.GetProofResponse, nil
 				case GetProofResponse_RESULT_ERROR:
 					return nil, fmt.Errorf("failed to get proof with ID %s, %w, prover response: %s",
