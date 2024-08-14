@@ -848,39 +848,27 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, proverI proverInterfac
 	}
 
 	// Sanity Check: state root from the proof must match the one from the final batch
-	finalDBBatch, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
-	}
-
-	stateRoot, err := prover.GetStateRootFromProof(finalProof.GetProof())
-	if err != nil {
-		log.Errorf("Failed to get state root from proof: %v", err)
-	} else {
-		if a.cfg.BatchProofSanityCheckEnabled && (stateRoot != common.Hash{}) && (stateRoot != finalDBBatch.Batch.StateRoot) {
-			for {
-				log.Errorf("State root from the final proof does not match the expected for batch %d: Proof = [%s] Expected = [%s]", proof.BatchNumberFinal, stateRoot.String(), finalDBBatch.Batch.StateRoot.String())
-				time.Sleep(a.cfg.RetryTime.Duration)
-			}
-		} else {
-			log.Infof("State root sanity check from the final proof for batch %d passed", proof.BatchNumberFinal)
-		}
-	}
-
-	/*
-		// Sanity Check: state root from the proof must match the one from the final batch
+	if a.cfg.BatchProofSanityCheckEnabled {
 		finalDBBatch, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
 		}
 
-		if !bytes.Equal(finalProof.Public.NewStateRoot, finalDBBatch.Batch.StateRoot.Bytes()) {
-			for {
-				log.Errorf("State root from the final proof [%#x] does not match the one from the batch [%#x]. HALTED", finalProof.Public.NewStateRoot, finalDBBatch.Batch.StateRoot.Bytes())
-				time.Sleep(a.cfg.RetryTime.Duration)
+		stateRoot, err := prover.GetStateRootFromProof(finalProof.GetProof())
+		if err != nil {
+			log.Errorf("Failed to get state root from proof: %v", err)
+		} else {
+			if stateRoot != finalDBBatch.Batch.StateRoot {
+				for {
+					log.Errorf("State root from the final proof does not match the expected for batch %d: Proof = [%s] Expected = [%s]", proof.BatchNumberFinal, stateRoot.String(), finalDBBatch.Batch.StateRoot.String())
+					time.Sleep(a.cfg.RetryTime.Duration)
+				}
+			} else {
+				log.Infof("State root sanity check from the final proof for batch %d passed", proof.BatchNumberFinal)
 			}
 		}
-	*/
+	}
+
 	return finalProof, nil
 }
 
