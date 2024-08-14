@@ -1164,7 +1164,7 @@ func (a *Aggregator) tryAggregateProofs(ctx context.Context, prover proverInterf
 	log.Infof("Proof ID for aggregated proof: %v", *proof.ProofID)
 	log = log.WithFields("proofId", *proof.ProofID)
 
-	recursiveProof, _, err := prover.WaitRecursiveProof(ctx, *proof.ProofID)
+	recursiveProof, err := prover.WaitRecursiveProof(ctx, *proof.ProofID)
 	if err != nil {
 		err = fmt.Errorf("failed to get aggregated proof from prover, %w", err)
 		log.Error(FirstToUpper(err.Error()))
@@ -1420,7 +1420,7 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 
 	log = log.WithFields("proofId", *proof.ProofID)
 
-	resGetProof, stateRoot, err := prover.WaitRecursiveProof(ctx, *proof.ProofID)
+	resGetProof, err := prover.WaitRecursiveProof(ctx, *proof.ProofID)
 	if err != nil {
 		err = fmt.Errorf("failed to get proof from prover, %w", err)
 		log.Error(FirstToUpper(err.Error()))
@@ -1428,16 +1428,6 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 	}
 
 	log.Info("Batch proof generated")
-
-	// Sanity Check: state root from the proof must match the one from the batch
-	if a.cfg.BatchProofSanityCheckEnabled && (stateRoot != batchToProve.StateRoot) {
-		for {
-			log.Errorf("State root from the proof does not match the expected for batch %d: Proof = [%s] Expected = [%s]", batchToProve.BatchNumber, stateRoot.String(), batchToProve.StateRoot.String())
-			time.Sleep(a.cfg.RetryTime.Duration)
-		}
-	} else {
-		log.Infof("State root sanity check for batch %d passed (%s)", batchToProve.BatchNumber, stateRoot.String())
-	}
 
 	proof.Proof = resGetProof
 
