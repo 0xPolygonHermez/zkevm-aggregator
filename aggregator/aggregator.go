@@ -205,7 +205,7 @@ func (a *Aggregator) retrieveWitness() {
 			dbBatch.Witness, err = getWitness(dbBatch.Batch.BatchNumber, a.cfg.WitnessURL, a.cfg.UseFullWitness)
 			if err != nil {
 				if err == busyError {
-					log.Warnf("Witness server is busy, retrying in %v", a.cfg.RetryTime.Duration)
+					log.Debugf("Witness server is busy, retrying in %v", a.cfg.RetryTime.Duration)
 				} else {
 					log.Errorf("Failed to get witness for batch %d, err: %v", dbBatch.Batch.BatchNumber, err)
 				}
@@ -810,16 +810,16 @@ func (a *Aggregator) handleFailureToAddVerifyBatchToBeMonitored(ctx context.Cont
 }
 
 // buildFinalProof builds and return the final proof for an aggregated/batch proof.
-func (a *Aggregator) buildFinalProof(ctx context.Context, prover proverInterface, proof *state.Proof) (*prover.FinalProof, error) {
+func (a *Aggregator) buildFinalProof(ctx context.Context, proverI proverInterface, proof *state.Proof) (*prover.FinalProof, error) {
 	log := log.WithFields(
-		"prover", prover.Name(),
-		"proverId", prover.ID(),
-		"proverAddr", prover.Addr(),
+		"prover", proverI.Name(),
+		"proverId", proverI.ID(),
+		"proverAddr", proverI.Addr(),
 		"recursiveProofId", *proof.ProofID,
 		"batches", fmt.Sprintf("%d-%d", proof.BatchNumber, proof.BatchNumberFinal),
 	)
 
-	finalProofID, err := prover.FinalProof(proof.Proof, a.cfg.SenderAddress)
+	finalProofID, err := proverI.FinalProof(proof.Proof, a.cfg.SenderAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get final proof id: %w", err)
 	}
@@ -828,7 +828,7 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, prover proverInterface
 	log.Infof("Final proof ID for batches [%d-%d]: %s", proof.BatchNumber, proof.BatchNumberFinal, *proof.ProofID)
 	log = log.WithFields("finalProofId", finalProofID)
 
-	finalProof, err := prover.WaitFinalProof(ctx, *proof.ProofID)
+	finalProof, err := proverI.WaitFinalProof(ctx, *proof.ProofID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get final proof from prover: %w", err)
 	}
@@ -845,6 +845,26 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, prover proverInterface
 			finalDBBatch.Batch.LocalExitRoot.TerminalString(), finalDBBatch.Batch.StateRoot.TerminalString())
 		finalProof.Public.NewStateRoot = finalDBBatch.Batch.StateRoot.Bytes()
 		finalProof.Public.NewLocalExitRoot = finalDBBatch.Batch.LocalExitRoot.Bytes()
+	}
+
+	// Sanity Check: state root from the proof must match the one from the final batch
+	finalDBBatch, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
+	}
+
+	stateRoot, err := prover.GetStateRootFromProof(finalProof.GetProof())
+	if err != nil {
+		log.Errorf("Failed to get state root from proof: %v", err)
+	} else {
+		if a.cfg.BatchProofSanityCheckEnabled && (stateRoot != common.Hash{}) && (stateRoot != finalDBBatch.Batch.StateRoot) {
+			for {
+				log.Errorf("State root from the final proof does not match the expected for batch %d: Proof = [%s] Expected = [%s]", proof.BatchNumberFinal, stateRoot.String(), finalDBBatch.Batch.StateRoot.String())
+				time.Sleep(a.cfg.RetryTime.Duration)
+			}
+		} else {
+			log.Infof("State root sanity check from the final proof for batch %d passed", proof.BatchNumberFinal)
+		}
 	}
 
 	/*
