@@ -319,6 +319,7 @@ func (p *Prover) waitProof(ctx context.Context, proofID string) (*GetProofRespon
 					return nil, fmt.Errorf("failed to get proof ID: %s, %w, prover response: %s",
 						proofID, ErrUnspecified, msg.GetProofResponse.String())
 				case GetProofResponse_RESULT_COMPLETED_OK:
+					log.Info("*** Proof generation completed: %v", msg.GetProofResponse.GetProof())
 					return msg.GetProofResponse, nil
 				case GetProofResponse_RESULT_ERROR:
 					return nil, fmt.Errorf("failed to get proof with ID %s, %w, prover response: %s",
