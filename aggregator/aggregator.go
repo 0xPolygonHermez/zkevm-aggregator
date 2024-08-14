@@ -1436,7 +1436,7 @@ func (a *Aggregator) tryGenerateBatchProof(ctx context.Context, prover proverInt
 			time.Sleep(a.cfg.RetryTime.Duration)
 		}
 	} else {
-		log.Infof("State root sanity check for batch %d passed", batchToProve.BatchNumber)
+		log.Infof("State root sanity check for batch %d passed (%s)", batchToProve.BatchNumber, stateRoot.String())
 	}
 
 	proof.Proof = resGetProof
