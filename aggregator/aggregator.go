@@ -848,13 +848,13 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, proverI proverInterfac
 	}
 
 	// Sanity Check: state root from the proof must match the one from the final batch
-	if a.cfg.BatchProofSanityCheckEnabled {
+	if a.cfg.FinalProofSanityCheckEnabled {
 		finalDBBatch, err := a.state.GetBatch(ctx, proof.BatchNumberFinal, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
 		}
 
-		stateRoot, err := prover.GetStateRootFromProof(finalProof.GetProof())
+		stateRoot, err := prover.GetStateRootFromProof(finalProof.Proof)
 		if err != nil {
 			log.Errorf("Failed to get state root from proof: %v", err)
 		} else {

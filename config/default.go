@@ -14,6 +14,7 @@ SenderAddress = ""
 CleanupLockedProofsInterval = "2m"
 GeneratingProofCleanupThreshold = "10m"
 BatchProofSanityCheckEnabled = true
+FinalProofSanityCheckEnabled = true
 ForkId = 9
 GasOffset = 0
 WitnessURL = "localhost:8123"
