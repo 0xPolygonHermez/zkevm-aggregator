@@ -310,7 +310,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					}
 
 					// Encode batch
-					if a.currentStreamBatch.Type != datastream.BatchType_BATCH_TYPE_INVALID {
+					if a.currentStreamBatch.Type != datastream.BatchType_BATCH_TYPE_INVALID && a.currentStreamBatch.Type != datastream.BatchType_BATCH_TYPE_INJECTED {
 						batchl2Data, err = state.EncodeBatchV2(&a.currentStreamBatchRaw)
 						if err != nil {
 							log.Errorf("Error encoding batch: %v", err)
@@ -319,7 +319,7 @@ func (a *Aggregator) handleReceivedDataStream(entry *datastreamer.FileEntry, cli
 					}
 
 					// If the batch is marked as Invalid in the DS we enforce retrieve the data from L1
-					if a.cfg.UseL1BatchData || a.currentStreamBatch.Type == datastream.BatchType_BATCH_TYPE_INVALID {
+					if a.cfg.UseL1BatchData || a.currentStreamBatch.Type == datastream.BatchType_BATCH_TYPE_INVALID || a.currentStreamBatch.Type == datastream.BatchType_BATCH_TYPE_INJECTED {
 						a.currentStreamBatch.BatchL2Data = virtualBatch.BatchL2Data
 					} else {
 						a.currentStreamBatch.BatchL2Data = batchl2Data
