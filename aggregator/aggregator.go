@@ -862,7 +862,7 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, proverI proverInterfac
 
 		if common.BytesToHash(finalProof.Public.NewStateRoot).String() != finalDBBatch.Batch.StateRoot.String() {
 			for {
-				log.Errorf("State root from the final proof does not match the expected for batch %d: Proof = [%s] Expected = [%s]", proof.BatchNumberFinal, string(finalProof.Public.NewStateRoot), finalDBBatch.Batch.StateRoot.String())
+				log.Errorf("State root from the final proof does not match the expected for batch %d: Proof = [%s] Expected = [%s]", proof.BatchNumberFinal, common.BytesToHash(finalProof.Public.NewStateRoot).String(), finalDBBatch.Batch.StateRoot.String())
 				time.Sleep(a.cfg.RetryTime.Duration)
 			}
 		} else {
