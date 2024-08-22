@@ -860,7 +860,7 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, proverI proverInterfac
 			return nil, fmt.Errorf("failed to retrieve batch with number [%d]", proof.BatchNumberFinal)
 		}
 
-		if common.BytesToHash(finalProof.Public.NewStateRoot).String() != finalDBBatch.Batch.StateRoot.String() {
+		if common.BytesToHash(finalProof.Public.NewStateRoot) != finalDBBatch.Batch.StateRoot {
 			for {
 				log.Errorf("State root from the final proof does not match the expected for batch %d: Proof = [%s] Expected = [%s]", proof.BatchNumberFinal, common.BytesToHash(finalProof.Public.NewStateRoot).String(), finalDBBatch.Batch.StateRoot.String())
 				time.Sleep(a.cfg.RetryTime.Duration)
