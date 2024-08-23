@@ -866,7 +866,7 @@ func (a *Aggregator) buildFinalProof(ctx context.Context, proverI proverInterfac
 				time.Sleep(a.cfg.RetryTime.Duration)
 			}
 		} else {
-			log.Infof("State root sanity check from the final proof for batch %d passed:Proof = [%s] Expected = [%s]", proof.BatchNumberFinal, common.BytesToHash(finalProof.Public.NewStateRoot).String(), finalDBBatch.Batch.StateRoot.String())
+			log.Infof("State root sanity check from the final proof for batch %d passed: Proof = [%s] Expected = [%s]", proof.BatchNumberFinal, common.BytesToHash(finalProof.Public.NewStateRoot).String(), finalDBBatch.Batch.StateRoot.String())
 		}
 	}
 
