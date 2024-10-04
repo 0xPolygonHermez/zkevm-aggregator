@@ -1,6 +1,6 @@
 module github.com/0xPolygonHermez/zkevm-aggregator
 
-go 1.22.6
+go 1.22
 
 require (
 	github.com/0xPolygon/cdk-rpc v0.0.0-20240419104226-c0a62ba0f49d
