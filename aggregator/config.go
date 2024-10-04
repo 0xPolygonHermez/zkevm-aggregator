@@ -7,11 +7,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager"
 	"github.com/0xPolygonHermez/zkevm-aggregator/config/types"
 	"github.com/0xPolygonHermez/zkevm-aggregator/db"
 	"github.com/0xPolygonHermez/zkevm-aggregator/encoding"
 	"github.com/0xPolygonHermez/zkevm-aggregator/log"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
 	syncronizerConfig "github.com/0xPolygonHermez/zkevm-synchronizer-l1/config"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 )
