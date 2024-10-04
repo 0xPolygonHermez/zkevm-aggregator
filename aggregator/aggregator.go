@@ -888,7 +888,7 @@ func (a *Aggregator) tryBuildFinalProof(ctx context.Context, prover proverInterf
 		// we don't have a proof generating at the moment, check if we
 		// have a proof ready to verify
 
-		proof, err = a.getAndLockProofReadyToVerify(ctx, prover, lastVerifiedBatchNumber)
+		proof, err = a.getAndLockProofReadyToVerify(ctx, lastVerifiedBatchNumber)
 		if errors.Is(err, state.ErrNotFound) {
 			// nothing to verify, swallow the error
 			log.Debug("No proof ready to verify")
@@ -982,7 +982,7 @@ func (a *Aggregator) validateEligibleFinalProof(ctx context.Context, proof *stat
 	return true, nil
 }
 
-func (a *Aggregator) getAndLockProofReadyToVerify(ctx context.Context, prover proverInterface, lastVerifiedBatchNum uint64) (*state.Proof, error) {
+func (a *Aggregator) getAndLockProofReadyToVerify(ctx context.Context, lastVerifiedBatchNum uint64) (*state.Proof, error) {
 	a.stateDBMutex.Lock()
 	defer a.stateDBMutex.Unlock()
 
